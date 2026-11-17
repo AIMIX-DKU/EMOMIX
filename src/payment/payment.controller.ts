@@ -32,7 +32,7 @@ export class PaymentController {
         if (!b.productId) throw new ApiError('VALIDATION_ERROR', 'productId 가 필요합니다.');
         const p = await this.prisma.product.findUnique({ where: { id: b.productId }, include: { creator: true } });
         if (!p) throw new ApiError('NOT_FOUND');
-        if (p.status !== 'ON_SALE' || p.hidden) throw new ApiError('PRODUCT_UNAVAILABLE');
+        if (p.status !== 'ON_SALE' || p.hidden || p.creator.status !== 'ACTIVE') throw new ApiError('PRODUCT_UNAVAILABLE');
         if (p.creator.userId === me.id) throw new ApiError('SELF_ACTION');
         if (await this.prisma.purchase.findFirst({ where: { userId: me.id, productId: p.id, refundedAt: null } })) throw new ApiError('ALREADY_PURCHASED');
         return orderView(await this.orders.create(me.id, { type: 'PRODUCT', productId: p.id, orderName: p.title, amount: p.price }));
@@ -88,6 +88,10 @@ export class PaymentController {
     const b = parse(z.object({ paymentKey: z.string().min(1).max(200), orderNo: z.string(), amount: z.number().int().positive() }), body);
     return this.idem.run(me.id, key, b, async () => {
       const order = await this.own(me, b.orderNo);
+      if (order.status === 'PAID') {
+        const done = await this.orders.paidResult(order, b.paymentKey); // 웹훅이 먼저 처리한 경우 같은 결과를 돌려준다
+        if (done) return done;
+      }
       if (order.status !== 'PENDING_PAYMENT') throw new ApiError('ORDER_NOT_PENDING');
       if (b.amount !== order.amount) throw new ApiError('AMOUNT_MISMATCH'); // 금액은 서버가 가진 주문 금액으로만 승인한다
       const pay = await this.toss.confirm(b.paymentKey, order.orderNo, order.amount);
@@ -99,7 +103,8 @@ export class PaymentController {
   /** PG → 서버 호출(쿠키·CSRF 없음). 서명을 검증하고, 본문을 믿지 않고 PG 에 상태를 다시 물어 처리한다. 중복 도착해도 결과는 같다. */
   @Post('payments/webhook') @HttpCode(200) @Access('webhook')
   async webhook(@Req() req: Request & { rawBody?: Buffer }, @Headers('x-webhook-signature') sig: string | undefined, @Body() body: unknown) {
-    if (!this.toss.verifySignature(req.rawBody, sig)) throw new ApiError('INVALID_SIGNATURE');
+    // 서명 헤더가 오면 반드시 맞아야 한다. 없으면 본문을 믿지 않고 아래에서 PG 에 상태를 다시 조회한 결과만 사용한다.
+    if (sig !== undefined && !this.toss.verifySignature(req.rawBody, sig)) throw new ApiError('INVALID_SIGNATURE');
     const b = parse(
       z.object({ eventType: z.string(), createdAt: z.string().optional(), data: z.object({ paymentKey: z.string(), orderId: z.string(), status: z.string() }) }),
       body,
@@ -111,7 +116,10 @@ export class PaymentController {
 
     if (pg.status === 'DONE' && order.status === 'PENDING_PAYMENT' && pg.totalAmount === order.amount) {
       await this.orders.fulfill(order, pg).catch((e) => { if (!(e instanceof ApiError)) throw e; });
-    } else if ((pg.status === 'CANCELED' || pg.status === 'PARTIAL_CANCELED') && order.status === 'PAID') {
+    } else if (pg.status === 'DONE' && (order.status === 'EXPIRED' || order.status === 'CANCELED')) {
+      // 만료·취소된 주문에 결제가 들어온 경우: 이행할 수 없으므로 자동 환불한다
+      await this.toss.cancel(b.data.paymentKey, '만료/취소된 주문 자동 환불').catch(() => undefined);
+    } else if (pg.status === 'CANCELED' && order.status === 'PAID') {
       await this.orders.cancel(order, 'PG 취소 동기화', { force: true }).catch((e) => { if (!(e instanceof ApiError)) throw e; });
     }
     return null;

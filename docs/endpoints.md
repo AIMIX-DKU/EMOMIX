@@ -10,7 +10,7 @@
 | 6 | Auth | Discord 로그인 콜백 | GET | `/api/v1/auth/discord/callback` | none |
 | 7 | Auth | Discord 가입 완료 | POST | `/api/v1/auth/discord/signup` | ticket |
 | 8 | Auth | 토큰 재발급 | POST | `/api/v1/auth/refresh` | refresh |
-| 9 | Auth | 로그아웃 | POST | `/api/v1/auth/logout` | user |
+| 9 | Auth | 로그아웃 | POST | `/api/v1/auth/logout` | refresh |
 | 10 | Auth | CSRF 토큰 발급 | GET | `/api/v1/auth/csrf` | none |
 | 11 | Auth | 비밀번호 재설정 | POST | `/api/v1/auth/password/reset` | none |
 | 12 | Auth | 비밀번호 변경 | PUT | `/api/v1/users/me/password` | user |

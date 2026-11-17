@@ -467,7 +467,8 @@
                             },
                             "email": {
                               "type": "string",
-                              "description": "이메일 (Discord 가입자는 Discord 이메일, 없으면 null)"
+                              "description": "이메일 (Discord 가입자는 Discord 이메일, 없으면 null)",
+                              "nullable": true
                             },
                             "nickname": {
                               "type": "string",
@@ -706,7 +707,8 @@
                             },
                             "email": {
                               "type": "string",
-                              "description": "이메일 (Discord 가입자는 Discord 이메일, 없으면 null)"
+                              "description": "이메일 (Discord 가입자는 Discord 이메일, 없으면 null)",
+                              "nullable": true
                             },
                             "nickname": {
                               "type": "string",
@@ -1188,7 +1190,8 @@
                             },
                             "email": {
                               "type": "string",
-                              "description": "이메일 (Discord 가입자는 Discord 이메일, 없으면 null)"
+                              "description": "이메일 (Discord 가입자는 Discord 이메일, 없으면 null)",
+                              "nullable": true
                             },
                             "nickname": {
                               "type": "string",
@@ -1477,7 +1480,7 @@
         "description": "**쿠키**: accessToken/refreshToken 쿠키 삭제, 서버의 refreshToken 폐기.",
         "security": [
           {
-            "cookieAuth": [],
+            "refreshCookie": [],
             "csrfHeader": []
           }
         ],
@@ -1529,7 +1532,7 @@
             }
           },
           "401": {
-            "description": "UNAUTHORIZED: accessToken 없음/만료",
+            "description": "UNAUTHORIZED: refreshToken 없음/만료/폐기됨/재사용 감지",
             "content": {
               "application/json": {
                 "schema": {
@@ -1537,7 +1540,7 @@
                 },
                 "examples": {
                   "UNAUTHORIZED": {
-                    "summary": "accessToken 없음/만료",
+                    "summary": "refreshToken 없음/만료/폐기됨/재사용 감지",
                     "value": {
                       "success": false,
                       "message": "로그인이 필요합니다.",
@@ -2223,7 +2226,8 @@
                         },
                         "email": {
                           "type": "string",
-                          "description": "이메일 (Discord 가입자는 Discord 이메일, 없으면 null)"
+                          "description": "이메일 (Discord 가입자는 Discord 이메일, 없으면 null)",
+                          "nullable": true
                         },
                         "nickname": {
                           "type": "string",
@@ -2399,7 +2403,8 @@
                         },
                         "email": {
                           "type": "string",
-                          "description": "이메일 (Discord 가입자는 Discord 이메일, 없으면 null)"
+                          "description": "이메일 (Discord 가입자는 Discord 이메일, 없으면 null)",
+                          "nullable": true
                         },
                         "nickname": {
                           "type": "string",
@@ -2794,7 +2799,8 @@
                         "profileImageUrl": {
                           "type": "string",
                           "format": "uri",
-                          "description": "프로필 이미지 URL (없으면 null)"
+                          "description": "프로필 이미지 URL (없으면 null)",
+                          "nullable": true
                         },
                         "bio": {
                           "type": "string",
@@ -5001,7 +5007,8 @@
                               "previewUrl": {
                                 "type": "string",
                                 "format": "uri",
-                                "description": "미리보기"
+                                "description": "미리보기 (없으면 null)",
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -5114,7 +5121,8 @@
                               "exampleUrl": {
                                 "type": "string",
                                 "format": "uri",
-                                "description": "예시 이미지"
+                                "description": "예시 이미지 (없으면 null)",
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -6376,6 +6384,7 @@
                             }
                           },
                           "description": "결과 (SUCCEEDED일 때만, 그 외 null)",
+                          "nullable": true,
                           "required": [
                             "images"
                           ]
@@ -7363,6 +7372,7 @@
                                   }
                                 },
                                 "description": "결과 (SUCCEEDED일 때만, 그 외 null)",
+                                "nullable": true,
                                 "required": [
                                   "images"
                                 ]
@@ -7646,6 +7656,7 @@
                             }
                           },
                           "description": "결과 (SUCCEEDED일 때만, 그 외 null)",
+                          "nullable": true,
                           "required": [
                             "images"
                           ]
@@ -9233,6 +9244,7 @@
                             }
                           },
                           "description": "결과 (SUCCEEDED일 때만, 그 외 null)",
+                          "nullable": true,
                           "required": [
                             "images"
                           ]
@@ -10208,6 +10220,7 @@
                             }
                           },
                           "description": "결과 (SUCCEEDED일 때만, 그 외 null)",
+                          "nullable": true,
                           "required": [
                             "images"
                           ]
@@ -10629,6 +10642,7 @@
                             }
                           },
                           "description": "결과 (SUCCEEDED일 때만, 그 외 null)",
+                          "nullable": true,
                           "required": [
                             "images"
                           ]
@@ -12142,7 +12156,8 @@
                                   "profileImageUrl": {
                                     "type": "string",
                                     "format": "uri",
-                                    "description": "프로필 이미지 URL (없으면 null)"
+                                    "description": "프로필 이미지 URL (없으면 null)",
+                                    "nullable": true
                                   }
                                 },
                                 "description": "작성자",
@@ -12358,7 +12373,8 @@
                             "profileImageUrl": {
                               "type": "string",
                               "format": "uri",
-                              "description": "프로필 이미지 URL (없으면 null)"
+                              "description": "프로필 이미지 URL (없으면 null)",
+                              "nullable": true
                             }
                           },
                           "description": "작성자",
@@ -12438,6 +12454,7 @@
                             }
                           },
                           "description": "공개된 프롬프트 정보 (sharePrompt=false면 null)",
+                          "nullable": true,
                           "required": [
                             "prompt",
                             "model",
@@ -13585,7 +13602,8 @@
                                   "profileImageUrl": {
                                     "type": "string",
                                     "format": "uri",
-                                    "description": "프로필 이미지 URL (없으면 null)"
+                                    "description": "프로필 이미지 URL (없으면 null)",
+                                    "nullable": true
                                   }
                                 },
                                 "description": "작성자",
@@ -13839,7 +13857,8 @@
                                   "profileImageUrl": {
                                     "type": "string",
                                     "format": "uri",
-                                    "description": "프로필 이미지 URL (없으면 null)"
+                                    "description": "프로필 이미지 URL (없으면 null)",
+                                    "nullable": true
                                   }
                                 },
                                 "description": "작성자",
@@ -14074,7 +14093,8 @@
                             "profileImageUrl": {
                               "type": "string",
                               "format": "uri",
-                              "description": "프로필 이미지 URL (없으면 null)"
+                              "description": "프로필 이미지 URL (없으면 null)",
+                              "nullable": true
                             }
                           },
                           "description": "작성자",
@@ -14312,7 +14332,8 @@
                             "profileImageUrl": {
                               "type": "string",
                               "format": "uri",
-                              "description": "프로필 이미지 URL (없으면 null)"
+                              "description": "프로필 이미지 URL (없으면 null)",
+                              "nullable": true
                             }
                           },
                           "description": "작성자",
@@ -14823,7 +14844,8 @@
                                   "profileImageUrl": {
                                     "type": "string",
                                     "format": "uri",
-                                    "description": "프로필 이미지 URL (없으면 null)"
+                                    "description": "프로필 이미지 URL (없으면 null)",
+                                    "nullable": true
                                   }
                                 },
                                 "description": "작성자",
@@ -15184,7 +15206,8 @@
                                   "profileImageUrl": {
                                     "type": "string",
                                     "format": "uri",
-                                    "description": "프로필 이미지 URL (없으면 null)"
+                                    "description": "프로필 이미지 URL (없으면 null)",
+                                    "nullable": true
                                   }
                                 },
                                 "description": "제작자",
@@ -15815,7 +15838,8 @@
                                   "profileImageUrl": {
                                     "type": "string",
                                     "format": "uri",
-                                    "description": "프로필 이미지 URL (없으면 null)"
+                                    "description": "프로필 이미지 URL (없으면 null)",
+                                    "nullable": true
                                   }
                                 },
                                 "description": "판매자",
@@ -15831,7 +15855,8 @@
                               },
                               "ratingAvg": {
                                 "type": "number",
-                                "description": "평균 별점 (후기 없으면 null)"
+                                "description": "평균 별점 (후기 없으면 null)",
+                                "nullable": true
                               },
                               "reviewCount": {
                                 "type": "integer",
@@ -16033,7 +16058,8 @@
                             "profileImageUrl": {
                               "type": "string",
                               "format": "uri",
-                              "description": "프로필 이미지 URL (없으면 null)"
+                              "description": "프로필 이미지 URL (없으면 null)",
+                              "nullable": true
                             }
                           },
                           "description": "판매자",
@@ -16049,7 +16075,8 @@
                         },
                         "ratingAvg": {
                           "type": "number",
-                          "description": "평균 별점 (후기 없으면 null)"
+                          "description": "평균 별점 (후기 없으면 null)",
+                          "nullable": true
                         },
                         "reviewCount": {
                           "type": "integer",
@@ -16158,6 +16185,7 @@
                             }
                           },
                           "description": "템플릿 공개 정보 (이미지 상품이면 null)",
+                          "nullable": true,
                           "required": [
                             "model",
                             "modelVersion",
@@ -16737,7 +16765,8 @@
                                   "profileImageUrl": {
                                     "type": "string",
                                     "format": "uri",
-                                    "description": "프로필 이미지 URL (없으면 null)"
+                                    "description": "프로필 이미지 URL (없으면 null)",
+                                    "nullable": true
                                   }
                                 },
                                 "description": "작성자",
@@ -18315,6 +18344,7 @@
                             }
                           },
                           "description": "결제 정보 (미결제면 null)",
+                          "nullable": true,
                           "required": [
                             "paymentId",
                             "method",
@@ -20078,7 +20108,8 @@
                               },
                               "dailyLimit": {
                                 "type": "integer",
-                                "description": "일일 한도 (없으면 null)"
+                                "description": "일일 한도 (없으면 null)",
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -20518,7 +20549,8 @@
                                   "profileImageUrl": {
                                     "type": "string",
                                     "format": "uri",
-                                    "description": "프로필 이미지 URL (없으면 null)"
+                                    "description": "프로필 이미지 URL (없으면 null)",
+                                    "nullable": true
                                   }
                                 },
                                 "description": "후원 대상",
@@ -20743,10 +20775,12 @@
                                   "profileImageUrl": {
                                     "type": "string",
                                     "format": "uri",
-                                    "description": "프로필 이미지 URL (없으면 null)"
+                                    "description": "프로필 이미지 URL (없으면 null)",
+                                    "nullable": true
                                   }
                                 },
                                 "description": "후원자 (익명이면 null)",
+                                "nullable": true,
                                 "required": [
                                   "id",
                                   "nickname",
@@ -21006,7 +21040,8 @@
                                   "profileImageUrl": {
                                     "type": "string",
                                     "format": "uri",
-                                    "description": "프로필 이미지 URL (없으면 null)"
+                                    "description": "프로필 이미지 URL (없으면 null)",
+                                    "nullable": true
                                   }
                                 },
                                 "description": "판매자",
@@ -21022,7 +21057,8 @@
                               },
                               "ratingAvg": {
                                 "type": "number",
-                                "description": "평균 별점 (후기 없으면 null)"
+                                "description": "평균 별점 (후기 없으면 null)",
+                                "nullable": true
                               },
                               "reviewCount": {
                                 "type": "integer",
@@ -22353,15 +22389,18 @@
                               },
                               "body": {
                                 "type": "string",
-                                "description": "내용"
+                                "description": "내용 (없으면 null)",
+                                "nullable": true
                               },
                               "targetType": {
                                 "type": "string",
-                                "description": "이동 대상 종류 (없으면 null)"
+                                "description": "이동 대상 종류 (없으면 null)",
+                                "nullable": true
                               },
                               "targetId": {
                                 "type": "string",
-                                "description": "이동 대상 ID (없으면 null)"
+                                "description": "이동 대상 ID (없으면 null)",
+                                "nullable": true
                               },
                               "isRead": {
                                 "type": "boolean",
@@ -24322,7 +24361,8 @@
                   "until": {
                     "type": "string",
                     "format": "date-time",
-                    "description": "정지 해제 일시 (없으면 무기한)"
+                    "description": "정지 해제 일시 (없으면 무기한)",
+                    "nullable": true
                   }
                 },
                 "required": [
@@ -25108,7 +25148,8 @@
                         },
                         "estimatedCostUsd": {
                           "type": "number",
-                          "description": "추정 생성 비용(USD, 자체 GPU면 전력·시간 환산값 또는 null)"
+                          "description": "추정 생성 비용(USD, 자체 GPU면 전력·시간 환산값 또는 null)",
+                          "nullable": true
                         },
                         "daily": {
                           "type": "array",
@@ -26183,7 +26224,8 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "처리 가능한 작업 종류(없으면 전부)"
+                    "description": "처리 가능한 작업 종류(없으면 전부)",
+                    "nullable": true
                   }
                 },
                 "required": [
@@ -26247,7 +26289,8 @@
                             "maskImageUrl": {
                               "type": "string",
                               "format": "uri",
-                              "description": "마스크 URL (INPAINT일 때만, 그 외 null)"
+                              "description": "마스크 URL (INPAINT일 때만, 그 외 null)",
+                              "nullable": true
                             },
                             "params": {
                               "type": "object",
@@ -26261,6 +26304,7 @@
                             }
                           },
                           "description": "배정된 작업 (대기 작업이 없으면 null)",
+                          "nullable": true,
                           "required": [
                             "jobId",
                             "type",

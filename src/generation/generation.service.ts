@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma.service.js';
 import { ApiError } from '../common/envelope.js';
 import { PolicyService } from '../common/policy.service.js';
 import { StorageService } from '../common/storage.service.js';
+import { startOfDay } from '../common/reward.service.js';
 import { reserveCredits } from '../common/wallet.js';
 
 /** 시제품용 금칙어(소문자 비교). 운영에서는 Policy 로 옮기거나 검수 모델로 교체한다. */
@@ -67,8 +68,7 @@ export class GenerationService {
     const texts = [s.work.prompt, ...(s.work.items ?? []).map((i) => i.prompt)];
     if (texts.some((t) => t && isBlocked(t))) throw new ApiError('CONTENT_BLOCKED');
 
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
+    const start = startOfDay();
     const today = await this.prisma.generationJob.findMany({
       where: { userId: s.userId, createdAt: { gte: start }, status: { notIn: ['CANCELED', 'FAILED'] } },
       select: { params: true },

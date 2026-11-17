@@ -94,6 +94,7 @@ export class WalletController {
       const rate = await this.policy.get('pointToCreditRate');
       const credits = Math.floor(b.points * rate);
       return this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT "userId" FROM "Wallet" WHERE "userId" = ${me.id} FOR UPDATE`; // 동시 교환이 월간 한도를 함께 통과하지 못하게
         const month = await tx.pointTransaction.aggregate({
           _sum: { amount: true }, where: { userId: me.id, type: 'EXCHANGE', createdAt: { gte: startOfMonth() } },
         });

@@ -47,6 +47,15 @@ export class OrderService {
   // ───────── 결제 완료 처리 ─────────
   /** 결제 승인 후 주문 종류별 처리(접근 권한/크레딧/후원 기록, 판매자 장부, 보상). 이미 처리된 주문이면 ORDER_NOT_PENDING. */
   async fulfill(order: Order, pay: TossPayment) {
+    if (order.type === 'PRODUCT') {
+      const dup = await this.prisma.purchase.findFirst({ where: { userId: order.userId, productId: order.productId!, refundedAt: null } });
+      if (dup) {
+        // 대기 주문을 두 개 만들어 둘 다 결제한 경우: 이미 가진 상품이므로 이번 결제는 PG 에서 취소하고 주문을 닫는다
+        await this.toss.cancel(pay.paymentKey, '중복 구매 자동 취소').catch(() => undefined);
+        await this.prisma.order.updateMany({ where: { id: order.id, status: 'PENDING_PAYMENT' }, data: { status: 'CANCELED', refundReason: '중복 구매' } });
+        throw new ApiError('ALREADY_PURCHASED');
+      }
+    }
     const fee = await this.policy.get('sellerFeeRate');
     const out = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.order.updateMany({ where: { id: order.id, status: 'PENDING_PAYMENT' }, data: { status: 'PAID', paidAt: new Date() } });
@@ -91,6 +100,17 @@ export class OrderService {
     return {
       paymentId: out.payment.id, orderNo: order.orderNo, status: 'DONE' as const,
       method: (pay.method as string | undefined) ?? 'card', approvedAt: out.payment.approvedAt, orderType: order.type, grantedCredits: out.granted,
+    };
+  }
+
+  /** 이미 승인된 주문의 결제 결과(웹훅이 먼저 처리한 뒤 confirm 이 뒤늦게 오는 경우에 재사용). */
+  async paidResult(order: Order, paymentKey: string) {
+    const payment = await this.prisma.payment.findUnique({ where: { orderId: order.id } });
+    if (!payment || payment.paymentKey !== paymentKey) return null;
+    const pkg = order.type === 'CREDIT_PACKAGE' ? await this.prisma.creditPackage.findUnique({ where: { id: order.creditPackageId! } }) : null;
+    return {
+      paymentId: payment.id, orderNo: order.orderNo, status: 'DONE' as const, method: (payment.raw as { method?: string } | null)?.method ?? 'card',
+      approvedAt: payment.approvedAt, orderType: order.type, grantedCredits: pkg ? pkg.credits + pkg.bonusCredits : 0,
     };
   }
 
@@ -140,7 +160,14 @@ export class OrderService {
         await revokePoints(tx, order.userId, 'PURCHASE', { type: 'ORDER', id: order.id });
       } else if (order.type === 'CREDIT_PACKAGE') {
         const pkg = await tx.creditPackage.findUniqueOrThrow({ where: { id: order.creditPackageId! } });
-        await creditChange(tx, order.userId, 'REFUND', -(pkg.credits + pkg.bonusCredits), { type: 'ORDER', id: order.id });
+        const total = pkg.credits + pkg.bonusCredits;
+        // 일반 환불은 사전 검사로 잔액이 충분함을 확인했다. PG 가 먼저 취소한 경우(force)는 남은 크레딧만큼만 회수한다
+        const w = await tx.wallet.findUnique({ where: { userId: order.userId } });
+        const take = opts.force ? Math.min(total, w?.creditBalance ?? 0) : total;
+        if (take > 0) await creditChange(tx, order.userId, 'REFUND', -take, { type: 'ORDER', id: order.id });
+      } else {
+        const d = await tx.donation.findUniqueOrThrow({ where: { orderId: order.id } });
+        await ledgerAdd(tx, d.creatorId, 'REFUND', -order.amount, { type: 'DONATION', id: d.id });
       }
     });
     return { orderNo: order.orderNo, status: 'REFUNDED' as const, refundedAmount: order.amount };

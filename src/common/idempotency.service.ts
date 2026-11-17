@@ -18,7 +18,14 @@ export class IdempotencyService {
       if (!(e instanceof Prisma.PrismaClientKnownRequestError) || e.code !== 'P2002') throw e;
       const rec = await this.prisma.idempotencyRecord.findUniqueOrThrow({ where: { userId_key: { userId, key } } });
       if (rec.requestHash !== requestHash) throw new ApiError('IDEMPOTENCY_CONFLICT');
-      if (rec.response === null) throw new ApiError('IDEMPOTENCY_CONFLICT'); // 같은 요청이 아직 처리 중
+      if (rec.response === null) {
+        // 함수가 중간에 끊겨(타임아웃·크래시) 영원히 '처리 중'으로 남은 기록은 60초 뒤 재시도를 허용한다
+        if (Date.now() - rec.createdAt.getTime() > 60_000) {
+          await this.prisma.idempotencyRecord.deleteMany({ where: { userId, key, response: { equals: Prisma.DbNull } } });
+          return this.run(userId, key, request, fn);
+        }
+        throw new ApiError('IDEMPOTENCY_CONFLICT'); // 같은 요청이 아직 처리 중
+      }
       return rec.response as T;
     }
     try {

@@ -65,11 +65,10 @@ export class AuthService {
       where: { email, purpose, verifiedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' },
     });
-    if (!row || row.attempts >= 5) throw new ApiError('INVALID_VERIFICATION_CODE');
-    if (row.codeHash !== sha256(`${email}:${code}`)) {
-      await this.prisma.emailVerification.update({ where: { id: row.id }, data: { attempts: { increment: 1 } } });
-      throw new ApiError('INVALID_VERIFICATION_CODE');
-    }
+    if (!row) throw new ApiError('INVALID_VERIFICATION_CODE');
+    // 시도 횟수를 먼저 원자적으로 올린다(병렬 요청으로 5회 제한을 우회하지 못하게). 한도를 넘으면 갱신이 0건이라 거부된다.
+    const slot = await this.prisma.emailVerification.updateMany({ where: { id: row.id, attempts: { lt: 5 } }, data: { attempts: { increment: 1 } } });
+    if (slot.count !== 1 || row.codeHash !== sha256(`${email}:${code}`)) throw new ApiError('INVALID_VERIFICATION_CODE');
     const token = randomToken(32);
     await this.prisma.emailVerification.update({
       where: { id: row.id },
@@ -139,20 +138,19 @@ export class AuthService {
   }
 
   // ───────── 로그인 ─────────
-  async login(res: Response, emailRaw: string, password: string) {
+  async login(res: Response, emailRaw: string, password: string, ip = '') {
     const email = emailRaw.toLowerCase();
     const key = `login:${email}`;
-    if ((await this.rate.count(key, 600)) >= 5) throw new ApiError('RATE_LIMITED');
+    // 시도를 먼저 기록한 뒤 센다(병렬 추측이 모두 통과하지 못하게). 성공하면 이메일 키 기록은 지운다. IP 키는 여러 계정에 대한 대입을 막는다.
+    await this.rate.consume(`loginip:${ip}`, 30, 600);
+    await this.rate.consume(key, 5, 600);
 
     const user = await this.prisma.user.findUnique({ where: { email }, include: { identities: true } });
     const valid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
     if (user && !user.passwordHash) {
       throw new ApiError('ACCOUNT_LINK_REQUIRED', undefined, { providers: user.identities.map((i) => i.provider) });
     }
-    if (!user || !valid || user.status === 'WITHDRAWN') {
-      await this.rate.hit(key);
-      throw new ApiError('INVALID_CREDENTIALS');
-    }
+    if (!user || !valid || user.status === 'WITHDRAWN') throw new ApiError('INVALID_CREDENTIALS');
     if ((await effectiveStatus(this.prisma, user)) === 'SUSPENDED') throw new ApiError('ACCOUNT_SUSPENDED');
     await this.rate.clear(key);
     await this.startSession(res, user.id, user.role);

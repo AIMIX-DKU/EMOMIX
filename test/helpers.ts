@@ -119,7 +119,7 @@ export async function cleanup(prisma: PrismaService, storage?: StorageService, e
     ]);
   }
   await prisma.emailVerification.deleteMany({ where: { email: { startsWith: 'e2e-' } } });
-  await prisma.rateHit.deleteMany({ where: { key: { contains: 'e2e-' } } });
+  await prisma.rateHit.deleteMany({ where: { OR: [{ key: { contains: 'e2e-' } }, { key: { startsWith: 'loginip:' } }] } });
 }
 
 // 1x1 PNG (생성 결과/업로드 테스트용)

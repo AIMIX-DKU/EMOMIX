@@ -3,8 +3,17 @@ import { PrismaService } from '../prisma.service.js';
 import { PolicyService } from './policy.service.js';
 import { pointChange } from './wallet.js';
 
-export const startOfMonth = (d = new Date()) => new Date(d.getFullYear(), d.getMonth(), 1);
-export const startOfNextMonth = (d = new Date()) => new Date(d.getFullYear(), d.getMonth() + 1, 1);
+// 서비스 기준 시간대는 한국(KST, UTC+9). 서버(Vercel)는 UTC 라서 '오늘'·'이번 달' 경계를 직접 계산한다.
+const KST = 9 * 3600 * 1000;
+export const startOfDay = (d = new Date()) => new Date(Math.floor((d.getTime() + KST) / 86_400_000) * 86_400_000 - KST);
+export const startOfMonth = (d = new Date()) => {
+  const k = new Date(d.getTime() + KST);
+  return new Date(Date.UTC(k.getUTCFullYear(), k.getUTCMonth(), 1) - KST);
+};
+export const startOfNextMonth = (d = new Date()) => {
+  const k = new Date(d.getTime() + KST);
+  return new Date(Date.UTC(k.getUTCFullYear(), k.getUTCMonth() + 1, 1) - KST);
+};
 
 /** 활동 포인트 보상. 규칙의 일일 한도, 월간 획득 한도, 같은 대상 중복 지급 금지를 지킨다. */
 @Injectable()
@@ -22,8 +31,7 @@ export class RewardService {
     if (user?.status !== 'ACTIVE') return false;
 
     if (await this.prisma.pointTransaction.findFirst({ where: { userId, rule: ruleKey, refType: ref.type, refId: ref.id } })) return false;
-    const day = new Date();
-    day.setHours(0, 0, 0, 0);
+    const day = startOfDay();
     if (rule.dailyLimit !== null) {
       const today = await this.prisma.pointTransaction.count({ where: { userId, rule: ruleKey, type: 'EARN', createdAt: { gte: day } } });
       if (today >= rule.dailyLimit) return false;

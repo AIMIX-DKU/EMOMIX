@@ -34,9 +34,9 @@ export class AuthController {
   }
 
   @Post('auth/login') @HttpCode(200) @Access('none')
-  login(@Body() b: unknown, @Res({ passthrough: true }) res: Response) {
+  login(@Body() b: unknown, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const x = parse(z.object({ email, password: z.string().min(1).max(200) }), b);
-    return this.auth.login(res, x.email, x.password);
+    return this.auth.login(res, x.email, x.password, req.ip);
   }
 
   @Get('auth/discord') @Access('none')
@@ -60,7 +60,7 @@ export class AuthController {
     return this.auth.refresh(req, res);
   }
 
-  @Post('auth/logout') @HttpCode(200) @Access('user')
+  @Post('auth/logout') @HttpCode(200) @Access('refresh')
   logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     return this.auth.logout(req, res);
   }

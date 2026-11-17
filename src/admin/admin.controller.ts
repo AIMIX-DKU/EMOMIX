@@ -9,6 +9,7 @@ import { parse, pageOf, pageResult, z } from '../common/validate.js';
 import { creditChange } from '../common/wallet.js';
 import { ledgerAdd } from '../payment/ledger.js';
 import { PrismaService } from '../prisma.service.js';
+import { restoreSuspendedProducts } from '../common/suspension.js';
 import { REPORT_TARGETS, reportStatusOut, targetOwner, type ReportTarget } from '../report/report.controller.js';
 
 const num = (min: number, max: number) => z.number().min(min).max(max);
@@ -122,10 +123,13 @@ export class AdminController {
   private async suspend(userId: string, reason: string, until: Date | undefined) {
     const u = await this.prisma.user.findUnique({ where: { id: userId }, include: { creator: true } });
     if (!u || u.status === 'WITHDRAWN') throw new ApiError('NOT_FOUND');
+    // 이 정지로 숨기는 상품 ID 를 기록해 둔다(해제 때 이것만 복구)
+    const onSale = u.creator ? await this.prisma.product.findMany({ where: { creatorId: u.creator.id, status: 'ON_SALE' }, select: { id: true } }) : [];
     await this.prisma.$transaction([
       this.prisma.user.update({ where: { id: userId }, data: { status: 'SUSPENDED', suspendedReason: reason, suspendedUntil: until ?? null } }),
       this.prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }),
       ...(u.creator ? [this.prisma.product.updateMany({ where: { creatorId: u.creator.id, status: 'ON_SALE' }, data: { status: 'HIDDEN' } })] : []),
+      this.prisma.auditLog.create({ data: { adminId: 'system', action: 'USER_SUSPEND_PRODUCTS', target: userId, detail: { productIds: onSale.map((p) => p.id) } } }),
     ]);
   }
 
@@ -142,10 +146,8 @@ export class AdminController {
   async unsuspend(@CurrentUser() me: Me, @Param('userId') userId: string) {
     const u = await this.prisma.user.findUnique({ where: { id: userId }, include: { creator: true } });
     if (!u || u.status === 'WITHDRAWN') throw new ApiError('NOT_FOUND');
-    await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: userId }, data: { status: 'ACTIVE', suspendedReason: null, suspendedUntil: null } }),
-      ...(u.creator ? [this.prisma.product.updateMany({ where: { creatorId: u.creator.id, status: 'HIDDEN' }, data: { status: 'ON_SALE' } })] : []),
-    ]);
+    await this.prisma.user.update({ where: { id: userId }, data: { status: 'ACTIVE', suspendedReason: null, suspendedUntil: null } });
+    if (u.creator) await restoreSuspendedProducts(this.prisma, userId);
     await this.audit(me.id, 'USER_UNSUSPEND', userId);
     return null;
   }

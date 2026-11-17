@@ -11,14 +11,16 @@ export class RateService {
     return this.prisma.rateHit.count({ where: { key, createdAt: { gte: new Date(Date.now() - windowSec * 1000) } } });
   }
 
-  hit(key: string) {
+  async hit(key: string) {
+    // 크론이 없으므로 가끔(약 1%) 오래된 기록을 지운다
+    if (Math.random() < 0.01) void this.prisma.rateHit.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - 2 * 24 * 3600 * 1000) } } }).catch(() => undefined);
     return this.prisma.rateHit.create({ data: { key } });
   }
 
-  /** window 안에 limit 회 이상이면 RATE_LIMITED. 통과하면 1회 기록한다. */
+  /** 먼저 1회 기록한 뒤 window 안의 횟수가 limit 을 넘으면 RATE_LIMITED(병렬 요청도 한 번씩 센다). */
   async consume(key: string, limit: number, windowSec: number) {
-    if ((await this.count(key, windowSec)) >= limit) throw new ApiError('RATE_LIMITED');
     await this.hit(key);
+    if ((await this.count(key, windowSec)) > limit) throw new ApiError('RATE_LIMITED');
   }
 
   clear(key: string) {

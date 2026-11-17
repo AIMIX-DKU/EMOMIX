@@ -31,6 +31,9 @@ export class WorkerController {
 
   /** 임대가 끝난 RUNNING 작업을 되돌린다. 크론 대신 claim 때마다 처리. 시도 횟수를 넘으면 실패 처리. */
   private async reapExpired() {
+    // 워커가 오래 없어서 대기열에 갇힌 작업은 30분 뒤 실패 처리하고 크레딧을 돌려준다
+    const stale = await this.prisma.generationJob.findMany({ where: { status: 'QUEUED', createdAt: { lt: new Date(Date.now() - 30 * 60 * 1000) } }, take: 20 });
+    for (const j of stale) await this.finish(j, 'FAILED', 'TIMEOUT');
     const expired = await this.prisma.generationJob.findMany({ where: { status: 'RUNNING', leaseExpiresAt: { lt: new Date() } }, take: 20 });
     for (const j of expired) {
       if (j.attempts >= MAX_ATTEMPTS) await this.finish(j, 'FAILED', 'TIMEOUT');

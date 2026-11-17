@@ -133,6 +133,7 @@ export class EmoticonController {
       const p = await this.prisma.product.findUnique({ where: { id: b.templateProductId } });
       const owned = p && (await this.prisma.purchase.findFirst({ where: { userId: me.id, productId: p.id, refundedAt: null } }));
       if (!p || !owned || p.type === 'EMOTICON_SET') throw new ApiError('NOT_PURCHASED');
+      if (!owned.accessedAt) await this.prisma.purchase.update({ where: { id: owned.id }, data: { accessedAt: new Date() } }); // 사용 이력은 환불 가능 여부에 쓰인다
       const t = p.template as { promptText?: string; variables?: { key: string; defaultValue: string }[] } | null;
       const defaults = Object.fromEntries((t?.variables ?? []).map((v) => [v.key, v.defaultValue]));
       template = renderTemplate(String(t?.promptText ?? ''), { ...defaults, ...(b.variables ?? {}) });

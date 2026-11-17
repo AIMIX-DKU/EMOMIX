@@ -477,6 +477,7 @@ paths:
                           email:
                             type: string
                             description: 이메일 (Discord 가입자는 Discord 이메일, 없으면 null)
+                            nullable: true
                           nickname:
                             type: string
                             description: 닉네임
@@ -650,6 +651,7 @@ paths:
                           email:
                             type: string
                             description: 이메일 (Discord 가입자는 Discord 이메일, 없으면 null)
+                            nullable: true
                           nickname:
                             type: string
                             description: 닉네임
@@ -986,6 +988,7 @@ paths:
                           email:
                             type: string
                             description: 이메일 (Discord 가입자는 Discord 이메일, 없으면 null)
+                            nullable: true
                           nickname:
                             type: string
                             description: 닉네임
@@ -1185,7 +1188,7 @@ paths:
       operationId: op009
       description: '**쿠키**: accessToken/refreshToken 쿠키 삭제, 서버의 refreshToken 폐기.'
       security:
-      - cookieAuth: []
+      - refreshCookie: []
         csrfHeader: []
       responses:
         '200':
@@ -1221,14 +1224,14 @@ paths:
                 type: string
               description: accessToken/refreshToken 쿠키 삭제, 서버의 refreshToken 폐기.
         '401':
-          description: 'UNAUTHORIZED: accessToken 없음/만료'
+          description: 'UNAUTHORIZED: refreshToken 없음/만료/폐기됨/재사용 감지'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
               examples:
                 UNAUTHORIZED:
-                  summary: accessToken 없음/만료
+                  summary: refreshToken 없음/만료/폐기됨/재사용 감지
                   value:
                     success: false
                     message: 로그인이 필요합니다.
@@ -1699,6 +1702,7 @@ paths:
                       email:
                         type: string
                         description: 이메일 (Discord 가입자는 Discord 이메일, 없으면 null)
+                        nullable: true
                       nickname:
                         type: string
                         description: 닉네임
@@ -1827,6 +1831,7 @@ paths:
                       email:
                         type: string
                         description: 이메일 (Discord 가입자는 Discord 이메일, 없으면 null)
+                        nullable: true
                       nickname:
                         type: string
                         description: 닉네임
@@ -2103,6 +2108,7 @@ paths:
                         type: string
                         format: uri
                         description: 프로필 이미지 URL (없으면 null)
+                        nullable: true
                       bio:
                         type: string
                         description: 소개
@@ -3632,7 +3638,8 @@ paths:
                             previewUrl:
                               type: string
                               format: uri
-                              description: 미리보기
+                              description: 미리보기 (없으면 null)
+                              nullable: true
                           required:
                           - key
                           - label
@@ -3710,7 +3717,8 @@ paths:
                             exampleUrl:
                               type: string
                               format: uri
-                              description: 예시 이미지
+                              description: 예시 이미지 (없으면 null)
+                              nullable: true
                           required:
                           - key
                           - label
@@ -4597,6 +4605,7 @@ paths:
                               - imageUrl
                             description: 생성된 이미지 목록
                         description: 결과 (SUCCEEDED일 때만, 그 외 null)
+                        nullable: true
                         required:
                         - images
                       errorCode:
@@ -5288,6 +5297,7 @@ paths:
                                     - imageUrl
                                   description: 생성된 이미지 목록
                               description: 결과 (SUCCEEDED일 때만, 그 외 null)
+                              nullable: true
                               required:
                               - images
                             errorCode:
@@ -5493,6 +5503,7 @@ paths:
                               - imageUrl
                             description: 생성된 이미지 목록
                         description: 결과 (SUCCEEDED일 때만, 그 외 null)
+                        nullable: true
                         required:
                         - images
                       errorCode:
@@ -6619,6 +6630,7 @@ paths:
                               - imageUrl
                             description: 생성된 이미지 목록
                         description: 결과 (SUCCEEDED일 때만, 그 외 null)
+                        nullable: true
                         required:
                         - images
                       errorCode:
@@ -7303,6 +7315,7 @@ paths:
                               - imageUrl
                             description: 생성된 이미지 목록
                         description: 결과 (SUCCEEDED일 때만, 그 외 null)
+                        nullable: true
                         required:
                         - images
                       errorCode:
@@ -7601,6 +7614,7 @@ paths:
                               - imageUrl
                             description: 생성된 이미지 목록
                         description: 결과 (SUCCEEDED일 때만, 그 외 null)
+                        nullable: true
                         required:
                         - images
                       errorCode:
@@ -8660,6 +8674,7 @@ paths:
                                   type: string
                                   format: uri
                                   description: 프로필 이미지 URL (없으면 null)
+                                  nullable: true
                               description: 작성자
                               required:
                               - id
@@ -8814,6 +8829,7 @@ paths:
                             type: string
                             format: uri
                             description: 프로필 이미지 URL (없으면 null)
+                            nullable: true
                         description: 작성자
                         required:
                         - id
@@ -8872,6 +8888,7 @@ paths:
                             additionalProperties: true
                             description: 설정값
                         description: 공개된 프롬프트 정보 (sharePrompt=false면 null)
+                        nullable: true
                         required:
                         - prompt
                         - model
@@ -9655,6 +9672,7 @@ paths:
                                   type: string
                                   format: uri
                                   description: 프로필 이미지 URL (없으면 null)
+                                  nullable: true
                               description: 작성자
                               required:
                               - id
@@ -9837,6 +9855,7 @@ paths:
                                   type: string
                                   format: uri
                                   description: 프로필 이미지 URL (없으면 null)
+                                  nullable: true
                               description: 작성자
                               required:
                               - id
@@ -10002,6 +10021,7 @@ paths:
                             type: string
                             format: uri
                             description: 프로필 이미지 URL (없으면 null)
+                            nullable: true
                         description: 작성자
                         required:
                         - id
@@ -10167,6 +10187,7 @@ paths:
                             type: string
                             format: uri
                             description: 프로필 이미지 URL (없으면 null)
+                            nullable: true
                         description: 작성자
                         required:
                         - id
@@ -10521,6 +10542,7 @@ paths:
                                   type: string
                                   format: uri
                                   description: 프로필 이미지 URL (없으면 null)
+                                  nullable: true
                               description: 작성자
                               required:
                               - id
@@ -10775,6 +10797,7 @@ paths:
                                   type: string
                                   format: uri
                                   description: 프로필 이미지 URL (없으면 null)
+                                  nullable: true
                               description: 제작자
                               required:
                               - id
@@ -11223,6 +11246,7 @@ paths:
                                   type: string
                                   format: uri
                                   description: 프로필 이미지 URL (없으면 null)
+                                  nullable: true
                               description: 판매자
                               required:
                               - id
@@ -11234,6 +11258,7 @@ paths:
                             ratingAvg:
                               type: number
                               description: 평균 별점 (후기 없으면 null)
+                              nullable: true
                             reviewCount:
                               type: integer
                               description: 후기 수
@@ -11381,6 +11406,7 @@ paths:
                             type: string
                             format: uri
                             description: 프로필 이미지 URL (없으면 null)
+                            nullable: true
                         description: 판매자
                         required:
                         - id
@@ -11392,6 +11418,7 @@ paths:
                       ratingAvg:
                         type: number
                         description: 평균 별점 (후기 없으면 null)
+                        nullable: true
                       reviewCount:
                         type: integer
                         description: 후기 수
@@ -11473,6 +11500,7 @@ paths:
                             type: boolean
                             description: 참고 이미지 필요 여부
                         description: 템플릿 공개 정보 (이미지 상품이면 null)
+                        nullable: true
                         required:
                         - model
                         - modelVersion
@@ -11888,6 +11916,7 @@ paths:
                                   type: string
                                   format: uri
                                   description: 프로필 이미지 URL (없으면 null)
+                                  nullable: true
                               description: 작성자
                               required:
                               - id
@@ -12992,6 +13021,7 @@ paths:
                             format: date-time
                             description: 승인 일시
                         description: 결제 정보 (미결제면 null)
+                        nullable: true
                         required:
                         - paymentId
                         - method
@@ -14229,6 +14259,7 @@ paths:
                             dailyLimit:
                               type: integer
                               description: 일일 한도 (없으면 null)
+                              nullable: true
                           required:
                           - action
                           - label
@@ -14541,6 +14572,7 @@ paths:
                                   type: string
                                   format: uri
                                   description: 프로필 이미지 URL (없으면 null)
+                                  nullable: true
                               description: 후원 대상
                               required:
                               - id
@@ -14701,7 +14733,9 @@ paths:
                                   type: string
                                   format: uri
                                   description: 프로필 이미지 URL (없으면 null)
+                                  nullable: true
                               description: 후원자 (익명이면 null)
+                              nullable: true
                               required:
                               - id
                               - nickname
@@ -14887,6 +14921,7 @@ paths:
                                   type: string
                                   format: uri
                                   description: 프로필 이미지 URL (없으면 null)
+                                  nullable: true
                               description: 판매자
                               required:
                               - id
@@ -14898,6 +14933,7 @@ paths:
                             ratingAvg:
                               type: number
                               description: 평균 별점 (후기 없으면 null)
+                              nullable: true
                             reviewCount:
                               type: integer
                               description: 후기 수
@@ -15838,13 +15874,16 @@ paths:
                               description: 제목
                             body:
                               type: string
-                              description: 내용
+                              description: 내용 (없으면 null)
+                              nullable: true
                             targetType:
                               type: string
                               description: 이동 대상 종류 (없으면 null)
+                              nullable: true
                             targetId:
                               type: string
                               description: 이동 대상 ID (없으면 null)
+                              nullable: true
                             isRead:
                               type: boolean
                               description: 읽음 여부
@@ -17221,6 +17260,7 @@ paths:
                   type: string
                   format: date-time
                   description: 정지 해제 일시 (없으면 무기한)
+                  nullable: true
               required:
               - reason
             example:
@@ -17770,6 +17810,7 @@ paths:
                       estimatedCostUsd:
                         type: number
                         description: 추정 생성 비용(USD, 자체 GPU면 전력·시간 환산값 또는 null)
+                        nullable: true
                       daily:
                         type: array
                         items:
@@ -18537,6 +18578,7 @@ paths:
                   items:
                     type: string
                   description: 처리 가능한 작업 종류(없으면 전부)
+                  nullable: true
               required:
               - workerId
             example:
@@ -18584,6 +18626,7 @@ paths:
                             type: string
                             format: uri
                             description: 마스크 URL (INPAINT일 때만, 그 외 null)
+                            nullable: true
                           params:
                             type: object
                             additionalProperties: true
@@ -18593,6 +18636,7 @@ paths:
                             format: date-time
                             description: 임대 만료 일시 (heartbeat로 연장)
                         description: 배정된 작업 (대기 작업이 없으면 null)
+                        nullable: true
                         required:
                         - jobId
                         - type

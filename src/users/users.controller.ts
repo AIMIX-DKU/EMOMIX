@@ -77,6 +77,12 @@ export class UsersController {
           nickname: `탈퇴한사용자-${me.id.slice(0, 8)}`, profileImage: { disconnect: true }, settings: {},
         },
       }),
+      ...(me.creatorId
+        ? [
+            this.prisma.product.updateMany({ where: { creatorId: me.creatorId, status: { not: 'STOPPED' } }, data: { status: 'STOPPED' } }),
+            this.prisma.creator.update({ where: { id: me.creatorId }, data: { status: 'SUSPENDED' } }),
+          ]
+        : []),
       this.prisma.identity.deleteMany({ where: { userId: me.id } }),
       this.prisma.refreshToken.updateMany({ where: { userId: me.id, revokedAt: null }, data: { revokedAt: new Date() } }),
       this.prisma.notification.deleteMany({ where: { userId: me.id } }),
