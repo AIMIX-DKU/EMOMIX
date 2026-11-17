@@ -72,6 +72,7 @@ model Identity {
   userId         String
   provider       Provider
   providerUserId String // EMAIL은 이메일, DISCORD는 Discord 사용자 ID
+  display        String?
   createdAt      DateTime @default(now())
 
   @@unique([provider, providerUserId])
@@ -102,6 +103,9 @@ model EmailVerification {
   attempts   Int       @default(0)
   expiresAt  DateTime
   verifiedAt DateTime?
+  tokenHash  String?   @unique
+  tokenExpiresAt DateTime?
+  consumedAt DateTime?
   createdAt  DateTime  @default(now())
 
   @@index([email, purpose])
@@ -146,6 +150,10 @@ model Creator {
   userId      String   @unique
   displayName String
   intro       String?
+  status      String   @default("ACTIVE")
+  bankName    String
+  accountHolder String
+  accountNumber String
   createdAt   DateTime @default(now())
 
   products    Product[]
@@ -700,4 +708,13 @@ model IdempotencyRecord {
   createdAt   DateTime @default(now())
 
   @@id([userId, key])
+}
+
+// 간단한 요청 제한(로그인 실패, 메일 발송 등). key 별로 최근 기록 개수를 센다.
+model RateHit {
+  id        String   @id @default(uuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
 }

@@ -1,15 +1,19 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EnvelopeFilter, EnvelopeInterceptor } from './common/envelope.js';
+import { AccessGuard } from './common/access.js';
+import { CommonModule } from './common/common.module.js';
+import { AuthModule } from './auth/auth.module.js';
+import { UsersModule } from './users/users.module.js';
 import { HealthController } from './health.controller.js';
 
 @Module({
+  imports: [CommonModule, AuthModule, UsersModule],
   controllers: [HealthController],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: EnvelopeInterceptor },
     { provide: APP_FILTER, useClass: EnvelopeFilter },
-    { provide: APP_PIPE, useValue: new ValidationPipe({ whitelist: true, transform: true }) },
+    { provide: APP_GUARD, useClass: AccessGuard },
   ],
 })
 export class AppModule {}

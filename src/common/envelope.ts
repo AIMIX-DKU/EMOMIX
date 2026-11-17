@@ -18,6 +18,7 @@ export class ApiError extends Error {
   constructor(
     public readonly code: ErrorCode,
     message?: string,
+    public readonly data: unknown = null,
   ) {
     super(message ?? ERRORS[code].message);
   }
@@ -47,10 +48,12 @@ export class EnvelopeFilter implements ExceptionFilter {
     const res = host.switchToHttp().getResponse<Response>();
     let code: ErrorCode = 'SERVER_ERROR';
     let message: string | undefined;
+    let data: unknown = null;
 
     if (e instanceof ApiError) {
       code = e.code;
       message = e.message;
+      data = e.data;
     } else if (e instanceof HttpException) {
       const s = e.getStatus();
       code =
@@ -65,6 +68,6 @@ export class EnvelopeFilter implements ExceptionFilter {
     }
 
     const { status, message: defMsg } = ERRORS[code];
-    res.status(status).json({ success: false, message: message ?? defMsg, data: null, errorCode: code });
+    res.status(status).json({ success: false, message: message ?? defMsg, data, errorCode: code });
   }
 }
