@@ -9,6 +9,7 @@ import type { StorageService } from '../src/common/storage.service.js';
 import { randomUUID } from 'node:crypto';
 
 process.env.MAIL_DRY = '1';
+process.env.TOSS_MOCK = '1'; // 토스 결제 승인/취소를 가짜로 처리(운영에서는 무시됨)
 
 export async function createApp() {
   const m = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -72,6 +73,27 @@ export async function cleanup(prisma: PrismaService, storage?: StorageService, e
     const chars = await prisma.character.findMany({ where: { ownerId: { in: ids } }, select: { id: true } });
     const sets = await prisma.emoticonSet.findMany({ where: { ownerId: { in: ids } }, select: { id: true } });
     const emos = await prisma.emoticon.findMany({ where: { setId: { in: sets.map((x) => x.id) } }, select: { id: true } });
+    const posts = await prisma.post.findMany({ where: { authorId: { in: ids } }, select: { id: true } });
+    const prods = await prisma.product.findMany({ where: { creatorId: { in: cids } }, select: { id: true } });
+    const orders = await prisma.order.findMany({ where: { OR: [{ userId: { in: ids } }, { productId: { in: prods.map((x) => x.id) } }] }, select: { id: true } });
+    const pids = posts.map((x) => x.id);
+    const prodIds = prods.map((x) => x.id);
+    const orderIds = orders.map((x) => x.id);
+    await prisma.$transaction([
+      prisma.report.deleteMany({ where: { OR: [{ reporterId: { in: ids } }, { targetId: { in: [...pids, ...prodIds, ...ids] } }] } }),
+      prisma.comment.deleteMany({ where: { OR: [{ postId: { in: pids } }, { authorId: { in: ids } }] } }),
+      prisma.like.deleteMany({ where: { OR: [{ postId: { in: pids } }, { userId: { in: ids } }] } }),
+      prisma.bookmark.deleteMany({ where: { OR: [{ postId: { in: pids } }, { userId: { in: ids } }] } }),
+      prisma.postTag.deleteMany({ where: { postId: { in: pids } } }),
+      prisma.post.deleteMany({ where: { id: { in: pids } } }),
+      prisma.review.deleteMany({ where: { OR: [{ productId: { in: prodIds } }, { authorId: { in: ids } }] } }),
+      prisma.purchase.deleteMany({ where: { OR: [{ productId: { in: prodIds } }, { userId: { in: ids } }, { orderId: { in: orderIds } }] } }),
+      prisma.donation.deleteMany({ where: { OR: [{ senderId: { in: ids } }, { creatorId: { in: cids } }, { orderId: { in: orderIds } }] } }),
+      prisma.payment.deleteMany({ where: { orderId: { in: orderIds } } }),
+      prisma.order.deleteMany({ where: { id: { in: orderIds } } }),
+      prisma.product.deleteMany({ where: { id: { in: prodIds } } }),
+      prisma.settlement.deleteMany({ where: { creatorId: { in: cids } } }),
+    ]);
     await prisma.$transaction([
       prisma.emoticon.updateMany({ where: { id: { in: emos.map((x) => x.id) } }, data: { currentVersionId: null } }),
       prisma.emoticonVersion.deleteMany({ where: { emoticonId: { in: emos.map((x) => x.id) } } }),
@@ -135,3 +157,30 @@ export function worker(app: INestApplication) {
 }
 
 export const idemKey = () => randomUUID();
+
+export async function idemPost(c: Client, url: string, body: object, key = idemKey()) {
+  const t = (await c.get('/auth/csrf')).body.data.csrfToken;
+  return c.agent.post('/api/v1' + url).set('X-CSRF-Token', t).set('Idempotency-Key', key).send(body);
+}
+
+/** 캐릭터 확정 → 세트 → 감정 생성(워커 처리)까지 마친 세트를 만든다. */
+export async function readySet(c: Client, w: ReturnType<typeof worker>, labels: string[] = ['happy', 'thanks']) {
+  const ch = (await c.post('/characters', { name: '테스트곰', description: '갈색 곰', stylePreset: 'pastel' })).body.data.id;
+  const cj = (await idemPost(c, `/characters/${ch}/candidates`, { count: 1 })).body.data.jobId;
+  await w.claimJob(cj);
+  await w.finish(cj, 1);
+  const cand = (await c.get(`/characters/${ch}/candidates`)).body.data.items[0].imageId;
+  await c.post(`/characters/${ch}/confirm`, { candidateImageId: cand });
+  const setId = (await c.post('/sets', { characterId: ch, title: '테스트 세트' })).body.data.id;
+  const gj = (await idemPost(c, `/sets/${setId}/generations`, { emotions: labels.map((key) => ({ key })) })).body.data.jobId;
+  await w.claimJob(gj);
+  await w.finish(gj, labels.length, labels);
+  return { characterId: ch as string, setId: setId as string };
+}
+
+export async function becomeCreator(c: Client) {
+  const r = await c.post('/creators/me', {
+    agreedTermIds: ['term-creator'], payoutAccount: { bankName: '테스트은행', accountHolder: '홍길동', accountNumber: '000-0000-0000' },
+  });
+  if (r.status !== 201) throw new Error('창작자 등록 실패: ' + JSON.stringify(r.body));
+}

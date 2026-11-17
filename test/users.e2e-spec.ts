@@ -58,7 +58,7 @@ describe('사용자·약관·업로드·창작자', () => {
     expect((await a.c.del(`/users/${b.id}/follow`)).status).toBe(200);
     expect((await a.c.get(`/users/${b.id}`)).body.data.followerCount).toBe(0);
     expect((await a.c.get('/users/00000000-0000-0000-0000-000000000000')).body.errorCode).toBe('NOT_FOUND');
-    const noti = await ctx.prisma.notification.count({ where: { userId: b.id, type: 'follow' } });
+    const noti = await ctx.prisma.notification.count({ where: { userId: b.id, type: 'FOLLOW' } });
     expect(noti).toBe(1);
   });
 

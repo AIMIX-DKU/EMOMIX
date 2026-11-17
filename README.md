@@ -1,132 +1,53 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# EmoMix Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+AI 이모티콘 플랫폼 EmoMix의 백엔드. NestJS 12 + Prisma 6 + PostgreSQL(Neon) + Neon Object Storage(S3 호환), Vercel 서버리스 배포.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+- API 명세: [`docs/openapi.yaml`](docs/openapi.yaml) (Postman으로 Import 가능), [`docs/conventions.md`](docs/conventions.md)(응답 포맷·에러 코드·인증), [`docs/endpoints.md`](docs/endpoints.md)(전체 135개 목록)
+- GPU 워커 연동: [`docs/worker-integration.md`](docs/worker-integration.md)
 
-## Description
+## 구조
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
-```bash
-$ npm install
+```
+src/
+  common/      응답 포맷(envelope)·에러 코드·접근 가드(쿠키 인증, CSRF)·토큰·스토리지·정책·보상·멱등성
+  auth/        이메일 인증·가입·로그인·Discord·토큰 회전·비밀번호
+  users/       내 정보·프로필·팔로우·설정·약관·창작자      upload/  이미지 업로드(presigned)
+  character/   프리셋·캐릭터·후보·확정                      generation/  생성 작업 큐·크레딧 예약/확정/반환
+  emoticon/    세트·이모티콘·버전·재생성·인페인트·다운로드   worker/  GPU 워커 API(pull)
+  community/   게시물·좋아요·북마크·댓글·태그·랭킹          market/  상품·후기·구매자 전용
+  payment/     주문·결제(토스 테스트)·웹훅·후원·판매자 장부·정산     wallet/  지갑·내역·포인트 교환
+  notification/ report/ admin/
+prisma/        schema.prisma, migrations, seed.mjs
+api/index.js   Vercel 서버리스 진입점
 ```
 
-## Compile and run the project
+## 로컬 실행
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm install
+cp .env.example .env        # 값 채우기(주석에 발급 방법)
+npx prisma migrate deploy   # DB 스키마 적용
+npm run seed                # 약관·프리셋·보상 규칙·크레딧 패키지·관리자 계정
+npm run start:dev           # http://localhost:3000/api/v1/health
 ```
 
-## Run tests
+## 점검
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+node scripts/check-infra.mjs     # Neon 스토리지·SMTP 연결 점검
+npm run build && node scripts/check-routes.mjs   # 명세 135개 엔드포인트와 구현 일치 여부
+npm run test:e2e                 # e2e 테스트(실제 DB·스토리지 사용, e2e- 접두 계정 생성 후 정리)
 ```
+테스트는 `MAIL_DRY=1`(메일 미발송), `TOSS_MOCK=1`(결제 승인 가짜 처리, 운영에서는 무시됨)로 동작합니다.
 
-## Deployment
+## 설계 메모
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+- **인증**: HttpOnly 쿠키(accessToken 15분 / refreshToken 14일 회전·재사용 감지 / csrfToken). 상태 변경 요청은 `X-CSRF-Token` + Origin 검사. 프론트와 API는 같은 사이트여야 합니다(`*.vercel.app` 서브도메인끼리는 다른 사이트라 쿠키가 전달되지 않으므로 프론트에서 `/api/*` 를 이 프로젝트로 rewrite 하세요).
+- **생성 작업**: POST → 크레딧 예약(RESERVE) + 작업 등록(QUEUED) → GPU 워커가 pull(claim) → 성공 시 확정(CONSUME), 실패/취소 시 반환(RELEASE). 임대(lease) 만료 작업은 `claim` 때 되돌려지므로 크론이 필요 없습니다.
+- **돈**: 크레딧(생성 이용권) / 활동 포인트(현금화 불가) / 판매자 장부(별도 원장)를 섞지 않습니다. 결제는 토스 **테스트 키**만 사용합니다.
+- **크론 없음**: 주문 만료, 정지 기간 만료, 작업 임대 회수, 미사용 업로드 정리는 모두 접근 시점에 처리합니다(Vercel Hobby 크론 제약 회피).
+- **운영 정책**(수수료율·한도 등)은 `Policy` 테이블 값이 코드 기본값보다 우선하며 `/admin/policies` 로 수정합니다.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## 배포 (Vercel)
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Observability
-
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-To add it to this project, run this and approve the code it prints at [observe.nestjs.com/link](https://observe.nestjs.com/link) - signing up for free if you have no account:
-
-```bash
-$ npx @nestjs/observe link
-```
-
-It installs `@nestjs/observe`, wires it into `AppModule` and `main.ts`, and writes the app key and secret into `.env`, which every `nest start` script (`start`, `start:dev`, `start:debug`) then loads. In production, set `OBSERVE_APP_KEY` and `OBSERVE_APP_SECRET` in the environment instead.
-
-Or do it by hand:
-
-```bash
-$ npm install @nestjs/observe
-```
-
-Then follow the [setup guide](https://docs.nestjs.com/observability/sdk) - it takes a single import and an app key.
-
-The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+환경변수는 `.env.example` 의 키를 Vercel 프로젝트에 그대로 등록합니다(`DATABASE_URL`은 풀러 주소). 마이그레이션은 로컬에서 `npx prisma migrate deploy` 로 적용합니다.
