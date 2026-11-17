@@ -1,0 +1,703 @@
+// EmoMix DB 스키마 초안. API 명세(emomix_api/openapi.yaml)의 리소스를 기준으로 했다.
+// 금액·포인트는 모두 정수(원 / 점). ID는 UUID 문자열.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // 풀러(pgbouncer) 연결 문자열
+  directUrl = env("DIRECT_URL") // 마이그레이션용 직접 연결
+}
+
+// ───────────── 사용자·인증 ─────────────
+enum Role {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  WITHDRAWN
+}
+
+enum Provider {
+  EMAIL
+  DISCORD
+}
+
+model User {
+  id              String     @id @default(uuid())
+  email           String?    @unique
+  passwordHash    String?
+  nickname        String     @unique
+  bio             String?
+  profileImage    Upload?    @relation("ProfileImage", fields: [profileImageId], references: [id])
+  profileImageId  String?    @unique
+  role            Role       @default(USER)
+  status          UserStatus @default(ACTIVE)
+  suspendedReason String?
+  settings        Json       @default("{}")
+  createdAt       DateTime   @default(now())
+  deletedAt       DateTime?
+
+  identities    Identity[]
+  refreshTokens RefreshToken[]
+  agreements    UserAgreement[]
+  creator       Creator?
+  wallet        Wallet?
+  uploads       Upload[]        @relation("UploadOwner")
+  characters    Character[]
+  jobs          GenerationJob[]
+  sets          EmoticonSet[]
+  posts         Post[]
+  comments      Comment[]
+  likes         Like[]
+  bookmarks     Bookmark[]
+  reviews       Review[]
+  purchases     Purchase[]
+  orders        Order[]
+  notifications Notification[]
+  reports       Report[]        @relation("Reporter")
+  following     Follow[]        @relation("Follower")
+  followers     Follow[]        @relation("Followee")
+  donationsSent Donation[]      @relation("DonationSender")
+}
+
+model Identity {
+  id             String   @id @default(uuid())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  provider       Provider
+  providerUserId String // EMAIL은 이메일, DISCORD는 Discord 사용자 ID
+  createdAt      DateTime @default(now())
+
+  @@unique([provider, providerUserId])
+  @@unique([userId, provider])
+}
+
+// refresh 토큰: 해시만 저장. family 단위로 회전·재사용 감지 시 전체 폐기.
+model RefreshToken {
+  id        String    @id @default(uuid())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  familyId  String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+model EmailVerification {
+  id         String    @id @default(uuid())
+  email      String
+  codeHash   String
+  purpose    String // SIGNUP | PASSWORD_RESET
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([email, purpose])
+}
+
+model Term {
+  id          String          @id @default(uuid())
+  type        String // SERVICE | PRIVACY | MARKETING ...
+  version     String
+  title       String
+  content     String
+  required    Boolean
+  effectiveAt DateTime
+  agreements  UserAgreement[]
+
+  @@unique([type, version])
+}
+
+model UserAgreement {
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId   String
+  term     Term     @relation(fields: [termId], references: [id])
+  termId   String
+  agreedAt DateTime @default(now())
+
+  @@id([userId, termId])
+}
+
+model Follow {
+  follower   User     @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followerId String
+  followee   User     @relation("Followee", fields: [followeeId], references: [id], onDelete: Cascade)
+  followeeId String
+  createdAt  DateTime @default(now())
+
+  @@id([followerId, followeeId])
+}
+
+model Creator {
+  id          String   @id @default(uuid())
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String   @unique
+  displayName String
+  intro       String?
+  createdAt   DateTime @default(now())
+
+  products    Product[]
+  ledger      SellerLedger[]
+  settlements Settlement[]
+  donations   Donation[]
+}
+
+// ───────────── 파일 ─────────────
+enum UploadPurpose {
+  REFERENCE
+  MASK
+  PROFILE
+  SAMPLE
+}
+
+enum UploadStatus {
+  PENDING
+  CONFIRMED
+}
+
+model Upload {
+  id          String        @id @default(uuid())
+  owner       User          @relation("UploadOwner", fields: [ownerId], references: [id])
+  ownerId     String
+  purpose     UploadPurpose
+  storageKey  String        @unique
+  contentType String
+  sizeBytes   Int
+  width       Int?
+  height      Int?
+  status      UploadStatus  @default(PENDING)
+  linked      Boolean       @default(false) // 다른 리소스에 연결되면 true. 미연결은 24시간 뒤 삭제
+  expiresAt   DateTime
+  createdAt   DateTime      @default(now())
+
+  profileOf User? @relation("ProfileImage")
+
+  @@index([status, linked, expiresAt])
+}
+
+// ───────────── 캐릭터·생성 ─────────────
+model StylePreset {
+  id         String  @id @default(uuid())
+  key        String  @unique
+  name       String
+  promptHint String
+  sampleUrl  String?
+  sortOrder  Int     @default(0)
+  active     Boolean @default(true)
+}
+
+model EmotionPreset {
+  id         String  @id @default(uuid())
+  key        String  @unique
+  name       String
+  promptHint String
+  sortOrder  Int     @default(0)
+  active     Boolean @default(true)
+}
+
+enum CharacterStatus {
+  DRAFT
+  CONFIRMED
+}
+
+model Character {
+  id                 String          @id @default(uuid())
+  owner              User            @relation(fields: [ownerId], references: [id])
+  ownerId            String
+  name               String
+  description        String?
+  stylePresetKey     String?
+  prompt             String
+  referenceUploadIds String[]
+  status             CharacterStatus @default(DRAFT)
+  baseImageKey       String? // 확정된 기준 캐릭터 이미지
+  createdAt          DateTime        @default(now())
+  deletedAt          DateTime?
+
+  candidates CharacterCandidate[]
+  sets       EmoticonSet[]
+
+  @@index([ownerId])
+}
+
+model CharacterCandidate {
+  id          String         @id @default(uuid())
+  character   Character      @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  characterId String
+  job         GenerationJob? @relation(fields: [jobId], references: [id])
+  jobId       String?
+  imageKey    String
+  createdAt   DateTime       @default(now())
+}
+
+enum JobType {
+  CHARACTER_CANDIDATES
+  EMOTION_SET
+  EMOTION_REGENERATE
+  INPAINT
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum TargetType {
+  CHARACTER
+  SET
+  EMOTICON
+}
+
+// 생성 작업 = DB 큐. GPU 워커가 claim으로 가져간다(FOR UPDATE SKIP LOCKED).
+model GenerationJob {
+  id              String     @id @default(uuid())
+  user            User       @relation(fields: [userId], references: [id])
+  userId          String
+  type            JobType
+  status          JobStatus  @default(QUEUED)
+  targetType      TargetType
+  targetId        String
+  params          Json // 프롬프트, 감정 목록, 입력 이미지 키 등 워커에 넘길 값
+  creditCost      Int
+  progress        Int        @default(0)
+  errorCode       String?
+  workerId        String?
+  leaseExpiresAt  DateTime?
+  cancelRequested Boolean    @default(false)
+  idempotencyKey  String?
+  createdAt       DateTime   @default(now())
+  startedAt       DateTime?
+  finishedAt      DateTime?
+
+  candidates CharacterCandidate[]
+  versions   EmoticonVersion[]
+
+  @@unique([userId, idempotencyKey])
+  @@index([status, createdAt])
+  @@index([status, leaseExpiresAt])
+}
+
+// ───────────── 이모티콘 ─────────────
+enum Visibility {
+  PRIVATE
+  PUBLIC
+}
+
+model EmoticonSet {
+  id          String     @id @default(uuid())
+  owner       User       @relation(fields: [ownerId], references: [id])
+  ownerId     String
+  character   Character? @relation(fields: [characterId], references: [id])
+  characterId String?
+  title       String
+  description String?
+  createdAt   DateTime   @default(now())
+  deletedAt   DateTime?
+
+  emoticons Emoticon[]
+  posts     Post[]
+  products  Product[]
+
+  @@index([ownerId])
+}
+
+enum EmoticonStatus {
+  GENERATING
+  READY
+  FAILED
+}
+
+model Emoticon {
+  id               String         @id @default(uuid())
+  set              EmoticonSet    @relation(fields: [setId], references: [id], onDelete: Cascade)
+  setId            String
+  label            String
+  status           EmoticonStatus @default(GENERATING)
+  currentVersionId String?        @unique
+  createdAt        DateTime       @default(now())
+
+  versions EmoticonVersion[] @relation("AllVersions")
+  current  EmoticonVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+
+  @@index([setId])
+}
+
+model EmoticonVersion {
+  id         String         @id @default(uuid())
+  emoticon   Emoticon       @relation("AllVersions", fields: [emoticonId], references: [id], onDelete: Cascade)
+  emoticonId String
+  version    Int
+  imageKey   String
+  thumbKey   String?
+  job        GenerationJob? @relation(fields: [jobId], references: [id])
+  jobId      String?
+  createdAt  DateTime       @default(now())
+
+  currentOf Emoticon? @relation("CurrentVersion")
+
+  @@unique([emoticonId, version])
+}
+
+// ───────────── 커뮤니티 ─────────────
+model Post {
+  id           String      @id @default(uuid())
+  author       User        @relation(fields: [authorId], references: [id])
+  authorId     String
+  set          EmoticonSet @relation(fields: [setId], references: [id])
+  setId        String
+  title        String
+  body         String?
+  hidden       Boolean     @default(false) // 관리자 숨김
+  likeCount    Int         @default(0)
+  commentCount Int         @default(0)
+  createdAt    DateTime    @default(now())
+  deletedAt    DateTime?
+
+  tags      PostTag[]
+  likes     Like[]
+  bookmarks Bookmark[]
+  comments  Comment[]
+
+  @@index([createdAt])
+  @@index([likeCount])
+}
+
+model Tag {
+  id    String    @id @default(uuid())
+  name  String    @unique
+  posts PostTag[]
+}
+
+model PostTag {
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId String
+  tag    Tag    @relation(fields: [tagId], references: [id])
+  tagId  String
+
+  @@id([postId, tagId])
+}
+
+model Like {
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId    String
+  createdAt DateTime @default(now())
+
+  @@id([userId, postId])
+}
+
+model Bookmark {
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId    String
+  createdAt DateTime @default(now())
+
+  @@id([userId, postId])
+}
+
+model Comment {
+  id        String    @id @default(uuid())
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId    String
+  author    User      @relation(fields: [authorId], references: [id])
+  authorId  String
+  body      String
+  hidden    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([postId, createdAt])
+}
+
+// ───────────── 마켓·주문·결제 ─────────────
+enum ProductType {
+  EMOTICON_SET
+  PROMPT_TEMPLATE
+  RECIPE_BUNDLE
+}
+
+enum ProductStatus {
+  ON_SALE
+  STOPPED
+}
+
+model Product {
+  id          String        @id @default(uuid())
+  creator     Creator       @relation(fields: [creatorId], references: [id])
+  creatorId   String
+  type        ProductType
+  set         EmoticonSet?  @relation(fields: [setId], references: [id])
+  setId       String?
+  title       String
+  description String?
+  price       Int // 원
+  template    Json? // PROMPT_TEMPLATE/RECIPE_BUNDLE: 모델, 버전, 설정, 샘플
+  status      ProductStatus @default(ON_SALE)
+  hidden      Boolean       @default(false)
+  salesCount  Int           @default(0)
+  createdAt   DateTime      @default(now())
+
+  reviews   Review[]
+  purchases Purchase[]
+  orders    Order[]
+
+  @@index([status, createdAt])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  product   Product  @relation(fields: [productId], references: [id])
+  productId String
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String
+  rating    Int
+  body      String?
+  createdAt DateTime @default(now())
+
+  @@unique([productId, authorId])
+}
+
+model Purchase {
+  id         String    @id @default(uuid())
+  user       User      @relation(fields: [userId], references: [id])
+  userId     String
+  product    Product   @relation(fields: [productId], references: [id])
+  productId  String
+  order      Order     @relation(fields: [orderId], references: [id])
+  orderId    String
+  createdAt  DateTime  @default(now())
+  refundedAt DateTime?
+
+  @@unique([userId, productId])
+}
+
+enum OrderType {
+  PRODUCT
+  CREDIT_PACKAGE
+  DONATION
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  CANCELED
+  REFUNDED
+  EXPIRED
+}
+
+model Order {
+  id              String         @id @default(uuid())
+  orderNo         String         @unique // PG orderId로 사용
+  user            User           @relation(fields: [userId], references: [id])
+  userId          String
+  type            OrderType
+  orderName       String
+  amount          Int
+  status          OrderStatus    @default(PENDING_PAYMENT)
+  product         Product?       @relation(fields: [productId], references: [id])
+  productId       String?
+  creditPackage   CreditPackage? @relation(fields: [creditPackageId], references: [id])
+  creditPackageId String?
+  idempotencyKey  String?
+  expiresAt       DateTime
+  createdAt       DateTime       @default(now())
+
+  payment  Payment?
+  purchase Purchase[]
+  donation Donation?
+
+  @@unique([userId, idempotencyKey])
+}
+
+model Payment {
+  id         String    @id @default(uuid())
+  order      Order     @relation(fields: [orderId], references: [id])
+  orderId    String    @unique
+  paymentKey String    @unique // Toss paymentKey
+  amount     Int
+  status     String // DONE | CANCELED | FAILED
+  raw        Json?
+  approvedAt DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model CreditPackage {
+  id      String  @id @default(uuid())
+  name    String
+  credits Int
+  price   Int
+  active  Boolean @default(true)
+  orders  Order[]
+}
+
+model Donation {
+  id        String   @id @default(uuid())
+  order     Order    @relation(fields: [orderId], references: [id])
+  orderId   String   @unique
+  sender    User     @relation("DonationSender", fields: [senderId], references: [id])
+  senderId  String
+  creator   Creator  @relation(fields: [creatorId], references: [id])
+  creatorId String
+  amount    Int
+  message   String?
+  createdAt DateTime @default(now())
+}
+
+// ───────────── 지갑: 크레딧 / 활동 포인트 / 판매자 장부 ─────────────
+model Wallet {
+  user           User   @relation(fields: [userId], references: [id])
+  userId         String @id
+  creditBalance  Int    @default(0) // 사용 가능
+  creditReserved Int    @default(0) // 생성 작업에 예약된 양
+  pointBalance   Int    @default(0)
+}
+
+enum CreditTxType {
+  PURCHASE
+  GRANT
+  TRIAL
+  EXCHANGE
+  RESERVE
+  CONSUME
+  RELEASE
+  REFUND
+}
+
+model CreditTransaction {
+  id           String       @id @default(uuid())
+  userId       String
+  type         CreditTxType
+  amount       Int // 부호 있는 변화량
+  balanceAfter Int
+  refType      String? // JOB | ORDER | ADMIN ...
+  refId        String?
+  createdAt    DateTime     @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model PointTransaction {
+  id           String   @id @default(uuid())
+  userId       String
+  type         String // EARN | EXCHANGE | ADJUST
+  rule         String? // 보상 규칙 키
+  amount       Int
+  balanceAfter Int
+  refType      String?
+  refId        String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model RewardRule {
+  key         String  @id
+  description String
+  points      Int
+  dailyLimit  Int?
+  active      Boolean @default(true)
+}
+
+model SellerLedger {
+  id           String   @id @default(uuid())
+  creator      Creator  @relation(fields: [creatorId], references: [id])
+  creatorId    String
+  type         String // SALE | DONATION | REFUND | FEE | SETTLEMENT
+  amount       Int // 부호 있는 변화량
+  balanceAfter Int
+  refType      String?
+  refId        String?
+  createdAt    DateTime @default(now())
+
+  @@index([creatorId, createdAt])
+}
+
+enum SettlementStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  PAID
+}
+
+model Settlement {
+  id          String           @id @default(uuid())
+  creator     Creator          @relation(fields: [creatorId], references: [id])
+  creatorId   String
+  amount      Int
+  status      SettlementStatus @default(REQUESTED)
+  note        String?
+  requestedAt DateTime         @default(now())
+  processedAt DateTime?
+}
+
+// ───────────── 알림·신고·운영 ─────────────
+model Notification {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  type      String
+  title     String
+  body      String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read, createdAt])
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  REJECTED
+}
+
+model Report {
+  id          String       @id @default(uuid())
+  reporter    User         @relation("Reporter", fields: [reporterId], references: [id])
+  reporterId  String
+  targetType  String // POST | COMMENT | PRODUCT | USER
+  targetId    String
+  reason      String
+  detail      String?
+  status      ReportStatus @default(OPEN)
+  adminNote   String?
+  createdAt   DateTime     @default(now())
+  processedAt DateTime?
+
+  @@unique([reporterId, targetType, targetId])
+}
+
+// 운영 정책(일일 생성 한도, 가격 범위, 월간 포인트 한도 등)
+model Policy {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// 멱등성 키(공통). 돈·크레딧·생성 POST 외에 응답 재현이 필요할 때 사용.
+model IdempotencyRecord {
+  userId      String
+  key         String
+  requestHash String
+  response    Json?
+  createdAt   DateTime @default(now())
+
+  @@id([userId, key])
+}
