@@ -18,9 +18,11 @@ export class StorageService {
     return getSignedUrl(this.s3, new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: contentType }), { expiresIn });
   }
 
-  getUrl(key: string | null | undefined, expiresIn = 3600): Promise<string | null> {
+  /** 읽기용 서명 URL. filename 을 주면 브라우저가 그 이름으로 내려받는다. */
+  getUrl(key: string | null | undefined, expiresIn = 3600, filename?: string): Promise<string | null> {
     if (!key) return Promise.resolve(null);
-    return getSignedUrl(this.s3, new GetObjectCommand({ Bucket: this.bucket, Key: key }), { expiresIn });
+    const disposition = filename ? `attachment; filename*=UTF-8''${encodeURIComponent(filename)}` : undefined;
+    return getSignedUrl(this.s3, new GetObjectCommand({ Bucket: this.bucket, Key: key, ResponseContentDisposition: disposition }), { expiresIn });
   }
 
   /** 파일 존재/용량 확인. 없으면 null. */

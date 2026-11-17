@@ -3,18 +3,18 @@ import { PrismaService } from '../prisma.service.js';
 
 /** 운영 정책 기본값. DB(Policy)에 같은 key 가 있으면 그 값이 우선한다. */
 export const POLICY_DEFAULTS = {
-  trialCredits: 20, // 가입 체험 크레딧
+  signupGrantCredits: 20, // 가입 체험 크레딧
   emoticonCreditCost: 1, // 이모티콘 1장 생성 비용
-  candidateCreditCost: 2, // 캐릭터 후보 생성 비용
-  dailyGenerationLimit: 100, // 사용자 일일 생성 한도(이미지 수)
-  maxQueueLength: 200, // 대기열 상한
+  candidateCreditCost: 1, // 캐릭터 후보 생성 비용
+  dailyGenerationLimit: 50, // 사용자 일일 생성 한도(이미지 수)
+  maxQueueLength: 30, // 대기열 상한
   priceMin: 500, // 상품 최소 가격(원)
   priceMax: 50000, // 상품 최대 가격(원)
-  platformFeeRate: 0.1, // 판매 수수료율
-  pointToCreditRate: 10, // 활동 포인트 N점 = 1크레딧
-  monthlyPointEarnCap: 3000,
-  monthlyPointExchangeCap: 1000, // 월 교환 가능 포인트
-  settlementMin: 10000, // 최소 정산 요청 금액(원)
+  sellerFeeRate: 0.2, // 판매 수수료율
+  pointToCreditRate: 0.1, // 활동 포인트 1점당 크레딧
+  monthlyPointEarnCap: 1000,
+  monthlyPointExchangeCap: 500, // 월 교환 가능 포인트
+  minSettlementAmount: 10000, // 최소 정산 요청 금액(원)
   donationMin: 1000,
   donationMax: 100000,
   maxFileBytes: 10 * 1024 * 1024,

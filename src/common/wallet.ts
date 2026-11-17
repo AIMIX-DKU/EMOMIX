@@ -40,3 +40,29 @@ export async function pointChange(
   });
   return w;
 }
+
+/** 생성 작업 크레딧 예약: 사용 가능 잔액에서 빼서 예약분으로 옮긴다. 잔액이 모자라면 INSUFFICIENT_CREDIT. */
+export async function reserveCredits(tx: Tx, userId: string, cost: number, jobId: string) {
+  await ensureWallet(tx, userId);
+  const w = await tx.wallet.update({ where: { userId }, data: { creditBalance: { decrement: cost }, creditReserved: { increment: cost } } });
+  if (w.creditBalance < 0) throw new ApiError('INSUFFICIENT_CREDIT');
+  await tx.creditTransaction.create({
+    data: { userId, type: 'RESERVE', amount: -cost, balanceAfter: w.creditBalance, refType: 'JOB', refId: jobId },
+  });
+}
+
+/** 성공: 예약분을 확정(사용 완료). 잔액 변화는 없으므로 내역의 amount 는 0. */
+export async function consumeCredits(tx: Tx, userId: string, cost: number, jobId: string) {
+  const w = await tx.wallet.update({ where: { userId }, data: { creditReserved: { decrement: cost } } });
+  await tx.creditTransaction.create({
+    data: { userId, type: 'CONSUME', amount: 0, balanceAfter: w.creditBalance, refType: 'JOB', refId: jobId },
+  });
+}
+
+/** 실패·취소: 예약분을 사용 가능 잔액으로 되돌린다. */
+export async function releaseCredits(tx: Tx, userId: string, cost: number, jobId: string) {
+  const w = await tx.wallet.update({ where: { userId }, data: { creditReserved: { decrement: cost }, creditBalance: { increment: cost } } });
+  await tx.creditTransaction.create({
+    data: { userId, type: 'RELEASE', amount: cost, balanceAfter: w.creditBalance, refType: 'JOB', refId: jobId },
+  });
+}

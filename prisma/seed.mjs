@@ -32,13 +32,15 @@ const emotions = [
   ['laugh', '빵터짐', 'laughing out loud rolling'],
 ];
 
+const situations = new Set(['thanks', 'cheer', 'congrats', 'hello', 'goodnight', 'ok', 'sorry']);
+
 const rewards = [
-  ['POST_PUBLISHED', '이모티콘 세트 공유', 10, 3], ['LIKE_RECEIVED', '좋아요 받음', 1, 30],
-  ['COMMENT_WRITTEN', '댓글 작성', 2, 5], ['SALE_MADE', '상품 판매', 20, null], ['REVIEW_WRITTEN', '후기 작성', 5, 3],
+  ['POST_PUBLISHED', '이모티콘 세트를 공유함', 10, 3], ['POST_LIKED', '내 게시물이 좋아요를 받음', 2, 20],
+  ['REVIEW_WRITTEN', '상품 후기를 작성함', 5, 3], ['SALE', '내 상품이 판매됨', 20, null], ['PURCHASE', '상품을 구매함', 5, 5],
 ];
 
 const packages = [
-  ['10 크레딧', 10, 1000], ['50 크레딧', 50, 4500], ['100 크레딧', 100, 8000],
+  ['10 크레딧', 10, 0, 1000], ['50 크레딧', 50, 5, 4500], ['100 크레딧', 100, 15, 8000],
 ];
 
 for (const [id, type, title, required, content] of terms) {
@@ -52,15 +54,20 @@ for (const [key, name, promptHint, sortOrder] of styles) {
   await prisma.stylePreset.upsert({ where: { key }, create: { key, name, promptHint, sortOrder }, update: { name, promptHint, sortOrder } });
 }
 for (const [i, [key, name, promptHint]] of emotions.entries()) {
-  await prisma.emotionPreset.upsert({ where: { key }, create: { key, name, promptHint, sortOrder: i }, update: { name, promptHint, sortOrder: i } });
+  const category = situations.has(key) ? 'SITUATION' : 'EMOTION';
+  await prisma.emotionPreset.upsert({
+    where: { key }, create: { key, name, promptHint, sortOrder: i, category }, update: { name, promptHint, sortOrder: i, category },
+  });
 }
 for (const [key, description, points, dailyLimit] of rewards) {
   await prisma.rewardRule.upsert({ where: { key }, create: { key, description, points, dailyLimit }, update: { description, points, dailyLimit } });
 }
-for (const [name, credits, price] of packages) {
+for (const [name, credits, bonusCredits, price] of packages) {
   const found = await prisma.creditPackage.findFirst({ where: { name } });
-  if (!found) await prisma.creditPackage.create({ data: { name, credits, price } });
+  if (!found) await prisma.creditPackage.create({ data: { name, credits, bonusCredits, price } });
+  else await prisma.creditPackage.update({ where: { id: found.id }, data: { credits, bonusCredits, price } });
 }
+await prisma.rewardRule.deleteMany({ where: { key: { notIn: rewards.map((r) => r[0]) } } });
 
 const adminEmail = (process.env.ADMIN_EMAIL ?? '').toLowerCase();
 if (adminEmail && process.env.ADMIN_PASSWORD) {

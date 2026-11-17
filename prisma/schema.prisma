@@ -39,6 +39,7 @@ model User {
   role            Role       @default(USER)
   status          UserStatus @default(ACTIVE)
   suspendedReason String?
+  suspendedUntil  DateTime?
   settings        Json       @default("{}")
   createdAt       DateTime   @default(now())
   deletedAt       DateTime?
@@ -96,17 +97,17 @@ model RefreshToken {
 }
 
 model EmailVerification {
-  id         String    @id @default(uuid())
-  email      String
-  codeHash   String
-  purpose    String // SIGNUP | PASSWORD_RESET
-  attempts   Int       @default(0)
-  expiresAt  DateTime
-  verifiedAt DateTime?
-  tokenHash  String?   @unique
+  id             String    @id @default(uuid())
+  email          String
+  codeHash       String
+  purpose        String // SIGNUP | PASSWORD_RESET
+  attempts       Int       @default(0)
+  expiresAt      DateTime
+  verifiedAt     DateTime?
+  tokenHash      String?   @unique
   tokenExpiresAt DateTime?
-  consumedAt DateTime?
-  createdAt  DateTime  @default(now())
+  consumedAt     DateTime?
+  createdAt      DateTime  @default(now())
 
   @@index([email, purpose])
 }
@@ -145,16 +146,16 @@ model Follow {
 }
 
 model Creator {
-  id          String   @id @default(uuid())
-  user        User     @relation(fields: [userId], references: [id])
-  userId      String   @unique
-  displayName String
-  intro       String?
-  status      String   @default("ACTIVE")
-  bankName    String
+  id            String   @id @default(uuid())
+  user          User     @relation(fields: [userId], references: [id])
+  userId        String   @unique
+  displayName   String
+  intro         String?
+  status        String   @default("ACTIVE")
+  bankName      String
   accountHolder String
   accountNumber String
-  createdAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
 
   products    Product[]
   ledger      SellerLedger[]
@@ -211,6 +212,8 @@ model EmotionPreset {
   key        String  @unique
   name       String
   promptHint String
+  category   String  @default("EMOTION")
+  exampleUrl String?
   sortOrder  Int     @default(0)
   active     Boolean @default(true)
 }
@@ -221,18 +224,19 @@ enum CharacterStatus {
 }
 
 model Character {
-  id                 String          @id @default(uuid())
-  owner              User            @relation(fields: [ownerId], references: [id])
-  ownerId            String
-  name               String
-  description        String?
-  stylePresetKey     String?
-  prompt             String
-  referenceUploadIds String[]
-  status             CharacterStatus @default(DRAFT)
-  baseImageKey       String? // 확정된 기준 캐릭터 이미지
-  createdAt          DateTime        @default(now())
-  deletedAt          DateTime?
+  id                    String          @id @default(uuid())
+  owner                 User            @relation(fields: [ownerId], references: [id])
+  ownerId               String
+  name                  String
+  description           String?
+  stylePresetKey        String?
+  prompt                String
+  appearanceDescription String?
+  referenceUploadIds    String[]
+  status                CharacterStatus @default(DRAFT)
+  baseImageKey          String? // 확정된 기준 캐릭터 이미지
+  createdAt             DateTime        @default(now())
+  deletedAt             DateTime?
 
   candidates CharacterCandidate[]
   sets       EmoticonSet[]
@@ -284,6 +288,8 @@ model GenerationJob {
   creditCost      Int
   progress        Int        @default(0)
   errorCode       String?
+  result          Json?
+  attempts        Int        @default(0)
   workerId        String?
   leaseExpiresAt  DateTime?
   cancelRequested Boolean    @default(false)
@@ -315,6 +321,7 @@ model EmoticonSet {
   title       String
   description String?
   createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @default(now()) @updatedAt
   deletedAt   DateTime?
 
   emoticons Emoticon[]
@@ -352,6 +359,7 @@ model EmoticonVersion {
   version    Int
   imageKey   String
   thumbKey   String?
+  source     String         @default("GENERATED")
   job        GenerationJob? @relation(fields: [jobId], references: [id])
   jobId      String?
   createdAt  DateTime       @default(now())
@@ -370,6 +378,9 @@ model Post {
   setId        String
   title        String
   body         String?
+  sharePrompt  Boolean     @default(false)
+  promptInfo   Json?
+  snapshot     Json        @default("[]")
   hidden       Boolean     @default(false) // 관리자 숨김
   likeCount    Int         @default(0)
   commentCount Int         @default(0)
@@ -424,6 +435,7 @@ model Comment {
   id        String    @id @default(uuid())
   post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
   postId    String
+  parentId  String?
   author    User      @relation(fields: [authorId], references: [id])
   authorId  String
   body      String
@@ -443,6 +455,7 @@ enum ProductType {
 
 enum ProductStatus {
   ON_SALE
+  HIDDEN
   STOPPED
 }
 
@@ -455,8 +468,12 @@ model Product {
   setId       String?
   title       String
   description String?
+  licenseType String        @default("PERSONAL")
+  licenseNote String?
+  snapshot    Json          @default("[]")
   price       Int // 원
   template    Json? // PROMPT_TEMPLATE/RECIPE_BUNDLE: 모델, 버전, 설정, 샘플
+  setSpec     Json?
   status      ProductStatus @default(ON_SALE)
   hidden      Boolean       @default(false)
   salesCount  Int           @default(0)
@@ -492,6 +509,7 @@ model Purchase {
   orderId    String
   createdAt  DateTime  @default(now())
   refundedAt DateTime?
+  accessedAt DateTime?
 
   @@unique([userId, productId])
 }
@@ -525,6 +543,9 @@ model Order {
   creditPackageId String?
   idempotencyKey  String?
   expiresAt       DateTime
+  paidAt          DateTime?
+  refundedAt      DateTime?
+  refundReason    String?
   createdAt       DateTime       @default(now())
 
   payment  Payment?
@@ -547,25 +568,27 @@ model Payment {
 }
 
 model CreditPackage {
-  id      String  @id @default(uuid())
-  name    String
-  credits Int
-  price   Int
-  active  Boolean @default(true)
-  orders  Order[]
+  id           String  @id @default(uuid())
+  name         String
+  credits      Int
+  bonusCredits Int     @default(0)
+  price        Int
+  active       Boolean @default(true)
+  orders       Order[]
 }
 
 model Donation {
-  id        String   @id @default(uuid())
-  order     Order    @relation(fields: [orderId], references: [id])
-  orderId   String   @unique
-  sender    User     @relation("DonationSender", fields: [senderId], references: [id])
-  senderId  String
-  creator   Creator  @relation(fields: [creatorId], references: [id])
-  creatorId String
-  amount    Int
-  message   String?
-  createdAt DateTime @default(now())
+  id          String   @id @default(uuid())
+  order       Order    @relation(fields: [orderId], references: [id])
+  orderId     String   @unique
+  sender      User     @relation("DonationSender", fields: [senderId], references: [id])
+  senderId    String
+  creator     Creator  @relation(fields: [creatorId], references: [id])
+  creatorId   String
+  amount      Int
+  message     String?
+  isAnonymous Boolean  @default(false)
+  createdAt   DateTime @default(now())
 }
 
 // ───────────── 지갑: 크레딧 / 활동 포인트 / 판매자 장부 ─────────────
@@ -657,15 +680,17 @@ model Settlement {
 
 // ───────────── 알림·신고·운영 ─────────────
 model Notification {
-  id        String   @id @default(uuid())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String
-  type      String
-  title     String
-  body      String?
-  link      String?
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id         String   @id @default(uuid())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  type       String
+  title      String
+  body       String?
+  link       String?
+  targetType String?
+  targetId   String?
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
 
   @@index([userId, read, createdAt])
 }
@@ -677,17 +702,19 @@ enum ReportStatus {
 }
 
 model Report {
-  id          String       @id @default(uuid())
-  reporter    User         @relation("Reporter", fields: [reporterId], references: [id])
-  reporterId  String
-  targetType  String // POST | COMMENT | PRODUCT | USER
-  targetId    String
-  reason      String
-  detail      String?
-  status      ReportStatus @default(OPEN)
-  adminNote   String?
-  createdAt   DateTime     @default(now())
-  processedAt DateTime?
+  id            String       @id @default(uuid())
+  reporter      User         @relation("Reporter", fields: [reporterId], references: [id])
+  reporterId    String
+  targetType    String // POST | COMMENT | PRODUCT | USER
+  targetId      String
+  reason        String
+  detail        String?
+  status        ReportStatus @default(OPEN)
+  adminNote     String?
+  handledBy     String?
+  handledAction String?
+  createdAt     DateTime     @default(now())
+  processedAt   DateTime?
 
   @@unique([reporterId, targetType, targetId])
 }
@@ -717,4 +744,16 @@ model RateHit {
   createdAt DateTime @default(now())
 
   @@index([key, createdAt])
+}
+
+// 관리자 작업 감사 로그(정책 변경, 정지, 크레딧 지급 등)
+model AuditLog {
+  id        String   @id @default(uuid())
+  adminId   String
+  action    String
+  target    String?
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }

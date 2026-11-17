@@ -6,6 +6,7 @@ import { setupApp } from '../src/setup.js';
 import { MailService } from '../src/common/mail.service.js';
 import { PrismaService } from '../src/prisma.service.js';
 import type { StorageService } from '../src/common/storage.service.js';
+import { randomUUID } from 'node:crypto';
 
 process.env.MAIL_DRY = '1';
 
@@ -68,7 +69,18 @@ export async function cleanup(prisma: PrismaService, storage?: StorageService, e
     if (storage) for (const u of ups) await storage.remove(u.storageKey);
     const creators = await prisma.creator.findMany({ where: { userId: { in: ids } }, select: { id: true } });
     const cids = creators.map((c) => c.id);
+    const chars = await prisma.character.findMany({ where: { ownerId: { in: ids } }, select: { id: true } });
+    const sets = await prisma.emoticonSet.findMany({ where: { ownerId: { in: ids } }, select: { id: true } });
+    const emos = await prisma.emoticon.findMany({ where: { setId: { in: sets.map((x) => x.id) } }, select: { id: true } });
     await prisma.$transaction([
+      prisma.emoticon.updateMany({ where: { id: { in: emos.map((x) => x.id) } }, data: { currentVersionId: null } }),
+      prisma.emoticonVersion.deleteMany({ where: { emoticonId: { in: emos.map((x) => x.id) } } }),
+      prisma.emoticon.deleteMany({ where: { id: { in: emos.map((x) => x.id) } } }),
+      prisma.emoticonSet.deleteMany({ where: { id: { in: sets.map((x) => x.id) } } }),
+      prisma.characterCandidate.deleteMany({ where: { characterId: { in: chars.map((x) => x.id) } } }),
+      prisma.generationJob.deleteMany({ where: { userId: { in: ids } } }),
+      prisma.character.deleteMany({ where: { id: { in: chars.map((x) => x.id) } } }),
+      prisma.idempotencyRecord.deleteMany({ where: { userId: { in: ids } } }),
       prisma.user.updateMany({ where: { id: { in: ids } }, data: { profileImageId: null } }),
       prisma.upload.deleteMany({ where: { ownerId: { in: ids } } }),
       prisma.notification.deleteMany({ where: { userId: { in: ids } } }),
@@ -87,3 +99,39 @@ export async function cleanup(prisma: PrismaService, storage?: StorageService, e
   await prisma.emailVerification.deleteMany({ where: { email: { startsWith: 'e2e-' } } });
   await prisma.rateHit.deleteMany({ where: { key: { contains: 'e2e-' } } });
 }
+
+// 1x1 PNG (생성 결과/업로드 테스트용)
+export const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+
+/** GPU 워커 흉내: X-Worker-Key 로 claim → 스토리지에 직접 업로드 → complete/fail. */
+export function worker(app: INestApplication) {
+  const call = (url: string, body: object, key = process.env.WORKER_API_KEY ?? '') =>
+    request(app.getHttpServer()).post('/api/v1/worker/jobs' + url).set('X-Worker-Key', key).send(body);
+  return {
+    call,
+    claim: (types?: string[]) => call('/claim', { workerId: 'test-gpu', types }),
+    /** 특정 작업을 가져올 때까지 claim 한다(다른 테스트 데이터가 앞에 있을 수 있어서). */
+    async claimJob(jobId: string) {
+      for (let i = 0; i < 5; i++) {
+        const r = await call('/claim', { workerId: 'test-gpu' });
+        if (r.body.data?.job?.jobId === jobId) return r.body.data.job;
+        if (!r.body.data?.job) break;
+      }
+      throw new Error('작업을 claim 하지 못했습니다: ' + jobId);
+    },
+    /** 이미지 n 장을 올리고 complete 한다. labels 가 있으면 라벨을 붙인다. */
+    async finish(jobId: string, n: number, labels: (string | undefined)[] = [], png: Buffer = PNG) {
+      const u = await call(`/${jobId}/upload-urls`, { count: n });
+      if (u.status !== 201) throw new Error('upload-urls 실패: ' + JSON.stringify(u.body));
+      const images = [];
+      for (const [i, up] of (u.body.data.uploads as { uploadKey: string; uploadUrl: string }[]).entries()) {
+        const put = await fetch(up.uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: png });
+        if (!put.ok) throw new Error('결과 업로드 실패 ' + put.status);
+        images.push({ uploadKey: up.uploadKey, label: labels[i] });
+      }
+      return call(`/${jobId}/complete`, { images });
+    },
+  };
+}
+
+export const idemKey = () => randomUUID();

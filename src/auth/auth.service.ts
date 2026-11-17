@@ -100,7 +100,7 @@ export class AuthService {
     email: string | null; passwordHash?: string; nickname: string; agreedTermIds: string[];
     provider: 'EMAIL' | 'DISCORD'; providerUserId: string; display?: string;
   }) {
-    const trial = await this.policy.get('trialCredits');
+    const trial = await this.policy.get('signupGrantCredits');
     try {
       return await this.prisma.$transaction(async (tx) => {
         const user = await tx.user.create({

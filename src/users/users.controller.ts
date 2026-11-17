@@ -134,7 +134,7 @@ export class UsersController {
       throw e;
     }
     const who = await this.prisma.user.findUniqueOrThrow({ where: { id: me.id }, select: { nickname: true } });
-    await this.notify.send(userId, 'follow', `${who.nickname}님이 회원님을 팔로우했습니다.`, undefined, `/users/${me.id}`);
+    await this.notify.send(userId, { kind: 'follow', type: 'FOLLOW', title: `${who.nickname}님이 회원님을 팔로우했습니다.`, targetType: 'USER', targetId: me.id });
     return null;
   }
 

@@ -5,10 +5,11 @@ import { PolicyService } from './policy.service.js';
 import { MailService } from './mail.service.js';
 import { RateService } from './rate.service.js';
 import { NotifyService } from './notify.service.js';
+import { IdempotencyService } from './idempotency.service.js';
+import { RewardService } from './reward.service.js';
+
+const providers = [PrismaService, StorageService, PolicyService, MailService, RateService, NotifyService, IdempotencyService, RewardService];
 
 @Global()
-@Module({
-  providers: [PrismaService, StorageService, PolicyService, MailService, RateService, NotifyService],
-  exports: [PrismaService, StorageService, PolicyService, MailService, RateService, NotifyService],
-})
+@Module({ providers, exports: providers })
 export class CommonModule {}
