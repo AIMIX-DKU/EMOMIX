@@ -11,6 +11,7 @@ import { MailService } from '../common/mail.service.js';
 import { RateService } from '../common/rate.service.js';
 import { ApiError } from '../common/envelope.js';
 import { creditChange } from '../common/wallet.js';
+import { effectiveStatus } from '../common/suspension.js';
 import { loadMe } from '../users/me.js';
 import { randomToken, sha256, signAccess, signTicket, verifyAccess, verifyTicket, type DiscordTicket } from '../common/tokens.js';
 import {
@@ -152,7 +153,7 @@ export class AuthService {
       await this.rate.hit(key);
       throw new ApiError('INVALID_CREDENTIALS');
     }
-    if (user.status === 'SUSPENDED') throw new ApiError('ACCOUNT_SUSPENDED');
+    if ((await effectiveStatus(this.prisma, user)) === 'SUSPENDED') throw new ApiError('ACCOUNT_SUSPENDED');
     await this.rate.clear(key);
     await this.startSession(res, user.id, user.role);
     return { user: await loadMe(this.prisma, this.storage, user.id) };
@@ -186,9 +187,10 @@ export class AuthService {
       clearSessionCookies(res);
       throw new ApiError('UNAUTHORIZED');
     }
-    if (row.user.status !== 'ACTIVE') {
+    const st = await effectiveStatus(this.prisma, row.user);
+    if (st !== 'ACTIVE') {
       clearSessionCookies(res);
-      throw new ApiError(row.user.status === 'SUSPENDED' ? 'ACCOUNT_SUSPENDED' : 'UNAUTHORIZED');
+      throw new ApiError(st === 'SUSPENDED' ? 'ACCOUNT_SUSPENDED' : 'UNAUTHORIZED');
     }
     await this.startSession(res, row.userId, row.user.role, row.familyId);
     return null;

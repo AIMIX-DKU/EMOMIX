@@ -8,10 +8,13 @@ import { UsersModule } from './users/users.module.js';
 import { GenerationModule } from './generation/generation.module.js';
 import { WalletModule } from './wallet/wallet.module.js';
 import { CommunityModule } from './community/community.module.js';
+import { MarketModule } from './market/market.module.js';
+import { PaymentModule } from './payment/payment.module.js';
+import { AdminModule } from './admin/admin.module.js';
 import { HealthController } from './health.controller.js';
 
 @Module({
-  imports: [CommonModule, AuthModule, UsersModule, GenerationModule, WalletModule, CommunityModule],
+  imports: [CommonModule, AuthModule, UsersModule, GenerationModule, WalletModule, CommunityModule, MarketModule, PaymentModule, AdminModule],
   controllers: [HealthController],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: EnvelopeInterceptor },

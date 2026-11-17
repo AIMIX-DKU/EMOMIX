@@ -5,6 +5,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { env, frontendOrigins } from '../config.js';
 import { PrismaService } from '../prisma.service.js';
 import { ApiError } from './envelope.js';
+import { effectiveStatus } from './suspension.js';
 import { verifyAccess } from './tokens.js';
 
 /** none: 누구나 / optional: 로그인하면 사용자 정보 제공 / user·creator·admin: 쿠키 로그인 필요
@@ -62,13 +63,14 @@ export class AccessGuard implements CanActivate {
     }
     const user = await this.prisma.user.findUnique({
       where: { id: claims.sub },
-      select: { id: true, role: true, status: true, creator: { select: { id: true, status: true } } },
+      select: { id: true, role: true, status: true, suspendedUntil: true, creator: { select: { id: true, status: true } } },
     });
-    if (!user || user.status === 'WITHDRAWN') {
+    const status = user ? await effectiveStatus(this.prisma, user) : null;
+    if (!user || status === 'WITHDRAWN') {
       if (level === 'optional') return true;
       throw new ApiError('UNAUTHORIZED');
     }
-    if (user.status === 'SUSPENDED') {
+    if (status === 'SUSPENDED') {
       if (level === 'optional') return true;
       throw new ApiError('ACCOUNT_SUSPENDED');
     }

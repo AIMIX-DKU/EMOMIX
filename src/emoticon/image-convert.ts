@@ -50,3 +50,15 @@ export async function compositeInpaint(original: Buffer, generated: Buffer, mask
   const top = await sharp(overlay, { raw: { width: w, height: h, channels: 4 } }).png().toBuffer();
   return sharp(original).ensureAlpha().composite([{ input: top }]).png().toBuffer();
 }
+
+/** 판매 미리보기: 256px 로 줄이고 대각선 반투명 띠를 덮는다(글꼴이 필요 없는 워터마크). */
+export async function watermarkPreview(src: Buffer): Promise<Buffer> {
+  const svg = Buffer.from(
+    '<svg width="256" height="256" xmlns="http://www.w3.org/2000/svg"><defs>' +
+      '<pattern id="p" width="56" height="56" patternUnits="userSpaceOnUse" patternTransform="rotate(-35)">' +
+      '<rect width="56" height="16" fill="#ffffff" fill-opacity="0.45"/><rect y="16" width="56" height="3" fill="#000000" fill-opacity="0.15"/></pattern></defs>' +
+      '<rect width="256" height="256" fill="url(#p)"/></svg>',
+  );
+  const base = await sharp(src).resize(256, 256, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } }).png().toBuffer();
+  return sharp(base).composite([{ input: svg }]).png().toBuffer();
+}

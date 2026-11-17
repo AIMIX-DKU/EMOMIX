@@ -9,7 +9,7 @@ export const POLICY_DEFAULTS = {
   dailyGenerationLimit: 50, // 사용자 일일 생성 한도(이미지 수)
   maxQueueLength: 30, // 대기열 상한
   priceMin: 500, // 상품 최소 가격(원)
-  priceMax: 50000, // 상품 최대 가격(원)
+  priceMax: 100000, // 상품 최대 가격(원)
   sellerFeeRate: 0.2, // 판매 수수료율
   pointToCreditRate: 0.1, // 활동 포인트 1점당 크레딧
   monthlyPointEarnCap: 1000,

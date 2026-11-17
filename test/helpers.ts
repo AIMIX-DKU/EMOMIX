@@ -12,7 +12,7 @@ process.env.MAIL_DRY = '1';
 
 export async function createApp() {
   const m = await Test.createTestingModule({ imports: [AppModule] }).compile();
-  const app = m.createNestApplication();
+  const app = m.createNestApplication({ rawBody: true });
   setupApp(app);
   await app.init();
   return { app, mail: app.get(MailService), prisma: app.get(PrismaService) };
