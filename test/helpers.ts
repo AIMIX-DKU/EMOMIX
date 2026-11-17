@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module.js';
 import { setupApp } from '../src/setup.js';
 import { MailService } from '../src/common/mail.service.js';
 import { PrismaService } from '../src/prisma.service.js';
+import type { StorageService } from '../src/common/storage.service.js';
 
 process.env.MAIL_DRY = '1';
 
@@ -55,12 +56,25 @@ export async function signedUp(app: INestApplication, mail: MailService, nick = 
   return { c, email, nick, id: r.body.data.user.id as string };
 }
 
-/** 테스트로 만든 사용자와 관련 데이터를 지운다(이메일이 e2e- 로 시작). */
-export async function cleanup(prisma: PrismaService) {
-  const users = await prisma.user.findMany({ where: { email: { startsWith: 'e2e-' } }, select: { id: true } });
-  const ids = users.map((u) => u.id);
+/** 테스트로 만든 사용자와 관련 데이터를 지운다(이메일이 e2e- 로 시작하거나 탈퇴한 e2e 사용자). */
+export async function cleanup(prisma: PrismaService, storage?: StorageService, extraIds: string[] = []) {
+  const users = await prisma.user.findMany({
+    where: { OR: [{ email: { startsWith: 'e2e-' } }, { nickname: { startsWith: 'e2e-' } }, { identities: { some: { providerUserId: { startsWith: 'e2e-' } } } }] },
+    select: { id: true },
+  });
+  const ids = [...new Set([...users.map((u) => u.id), ...extraIds])];
   if (ids.length) {
+    const ups = await prisma.upload.findMany({ where: { ownerId: { in: ids } } });
+    if (storage) for (const u of ups) await storage.remove(u.storageKey);
+    const creators = await prisma.creator.findMany({ where: { userId: { in: ids } }, select: { id: true } });
+    const cids = creators.map((c) => c.id);
     await prisma.$transaction([
+      prisma.user.updateMany({ where: { id: { in: ids } }, data: { profileImageId: null } }),
+      prisma.upload.deleteMany({ where: { ownerId: { in: ids } } }),
+      prisma.notification.deleteMany({ where: { userId: { in: ids } } }),
+      prisma.follow.deleteMany({ where: { OR: [{ followerId: { in: ids } }, { followeeId: { in: ids } }] } }),
+      prisma.sellerLedger.deleteMany({ where: { creatorId: { in: cids } } }),
+      prisma.creator.deleteMany({ where: { id: { in: cids } } }),
       prisma.refreshToken.deleteMany({ where: { userId: { in: ids } } }),
       prisma.creditTransaction.deleteMany({ where: { userId: { in: ids } } }),
       prisma.pointTransaction.deleteMany({ where: { userId: { in: ids } } }),
