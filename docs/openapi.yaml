@@ -18719,10 +18719,14 @@ paths:
                 progress:
                   type: integer
                   description: 진행률 0~100
+                workerId:
+                  type: string
+                  description: claim 때 보낸 워커 식별자. 보내면 임대한 워커와 같은지 검사(임대가 만료돼 다른 워커에게 넘어간 작업을 이전 워커가 건드리지 못하게)
               required:
               - progress
             example:
               progress: 40
+              workerId: gpu-01
       responses:
         '200':
           description: 요청이 성공했습니다.
@@ -18845,10 +18849,14 @@ paths:
                 count:
                   type: integer
                   description: 결과 이미지 수
+                workerId:
+                  type: string
+                  description: claim 때 보낸 워커 식별자. 보내면 임대한 워커와 같은지 검사(임대가 만료돼 다른 워커에게 넘어간 작업을 이전 워커가 건드리지 못하게)
               required:
               - count
             example:
               count: 8
+              workerId: gpu-01
       responses:
         '201':
           description: 업로드 URL이 발급되었습니다.
@@ -18960,7 +18968,7 @@ paths:
       - Worker
       summary: 작업 완료 보고
       operationId: op134
-      description: 서버가 파일을 검수한 뒤 이모티콘/후보 이미지로 연결하고 크레딧을 확정(CONSUME)한다.
+      description: 서버가 파일을 검수한 뒤 이모티콘/후보 이미지로 연결하고 크레딧을 확정(CONSUME)한다. 요청한 장수보다 적게 돌아오면 돌아온 장수만큼만 확정하고 나머지 예약분은 반환한다.
       parameters:
       - name: jobId
         in: path
@@ -18991,12 +18999,16 @@ paths:
                     required:
                     - uploadKey
                   description: 결과 이미지
+                workerId:
+                  type: string
+                  description: claim 때 보낸 워커 식별자. 보내면 임대한 워커와 같은지 검사(임대가 만료돼 다른 워커에게 넘어간 작업을 이전 워커가 건드리지 못하게)
               required:
               - images
             example:
               images:
               - uploadKey: k-001
                 label: thanks
+              workerId: gpu-01
       responses:
         '200':
           description: 완료 처리되었습니다.
@@ -19126,11 +19138,15 @@ paths:
                 message:
                   type: string
                   description: 로그용 메시지
+                workerId:
+                  type: string
+                  description: claim 때 보낸 워커 식별자. 보내면 임대한 워커와 같은지 검사(임대가 만료돼 다른 워커에게 넘어간 작업을 이전 워커가 건드리지 못하게)
               required:
               - reason
             example:
               reason: GPU_ERROR
               message: string
+              workerId: gpu-01
       responses:
         '200':
           description: 실패 처리되었습니다.

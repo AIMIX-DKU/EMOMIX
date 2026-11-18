@@ -71,9 +71,13 @@ export class UploadController {
     if (!info || info.type !== up.contentType) return fail('UNSUPPORTED_FILE_TYPE');
     if (info.width < 1 || info.height < 1 || info.width > 8192 || info.height > 8192) return fail('UNSUPPORTED_FILE_TYPE');
 
+    // 검사를 통과한 내용을 새 키로 복사해 확정한다: 클라이언트가 가진 업로드 URL(만료 전)로 나중에 파일을 바꿔치기할 수 없다
+    const safeKey = up.storageKey.replace(/(\.\w+)$/, '-ok$1');
+    await this.storage.copy(up.storageKey, safeKey);
+    await this.storage.remove(up.storageKey);
     const done = await this.prisma.upload.update({
       where: { id: up.id },
-      data: { status: 'CONFIRMED', width: info.width, height: info.height },
+      data: { status: 'CONFIRMED', width: info.width, height: info.height, storageKey: safeKey },
     });
     return this.view(done);
   }

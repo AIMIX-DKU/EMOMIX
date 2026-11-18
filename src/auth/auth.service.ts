@@ -196,7 +196,11 @@ export class AuthService {
 
   async logout(req: Request, res: Response) {
     const token = req.cookies?.refreshToken as string | undefined;
-    if (token) await this.prisma.refreshToken.updateMany({ where: { tokenHash: sha256(token) }, data: { revokedAt: new Date() } });
+    if (token) {
+      // 이 기기의 세션 전체(가족)를 폐기한다. 그래야 아직 만료되지 않은 액세스 토큰도 즉시 무효가 된다
+      const row = await this.prisma.refreshToken.findUnique({ where: { tokenHash: sha256(token) } });
+      if (row) await this.prisma.refreshToken.updateMany({ where: { familyId: row.familyId, revokedAt: null }, data: { revokedAt: new Date() } });
+    }
     clearSessionCookies(res);
     return null;
   }

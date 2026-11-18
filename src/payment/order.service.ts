@@ -143,9 +143,9 @@ export class OrderService {
     if (!opts.force && (await this.refundBlocker(order))) throw new ApiError('NOT_REFUNDABLE');
     if (order.status !== 'PAID') throw new ApiError('NOT_REFUNDABLE');
     const payment = await this.prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
-    if (!opts.force) await this.toss.cancel(payment.paymentKey, reason); // PG 환불이 먼저, 성공해야 내부 처리
-
     await this.prisma.$transaction(async (tx) => {
+      // 지갑 행을 먼저 잠가 검사와 회수 사이에 크레딧이 쓰이는 경합을 막는다
+      await tx.$queryRaw`SELECT "userId" FROM "Wallet" WHERE "userId" = ${order.userId} FOR UPDATE`;
       const r = await tx.order.updateMany({ where: { id: order.id, status: 'PAID' }, data: { status: 'REFUNDED', refundedAt: new Date(), refundReason: reason } });
       if (r.count !== 1) throw new ApiError('NOT_REFUNDABLE');
       await tx.payment.update({ where: { id: payment.id }, data: { status: 'CANCELED' } });
@@ -169,6 +169,8 @@ export class OrderService {
         const d = await tx.donation.findUniqueOrThrow({ where: { orderId: order.id } });
         await ledgerAdd(tx, d.creatorId, 'REFUND', -order.amount, { type: 'DONATION', id: d.id });
       }
+      // PG 환불은 마지막에: 실패하면 위의 모든 DB 변경이 함께 롤백된다(돈도 내부 상태도 그대로)
+      if (!opts.force) await this.toss.cancel(payment.paymentKey, reason);
     });
     return { orderNo: order.orderNo, status: 'REFUNDED' as const, refundedAmount: order.amount };
   }

@@ -71,17 +71,18 @@ export class WorkerController {
   }
 
   /** 이 워커가 아직 유효한 임대를 가진 RUNNING 작업이어야 한다. */
-  private async leased(jobId: string) {
+  private async leased(jobId: string, workerId?: string) {
     const job = await this.prisma.generationJob.findUnique({ where: { id: jobId } });
     if (!job) throw new ApiError('NOT_FOUND');
     if (job.status !== 'RUNNING' || !job.leaseExpiresAt || job.leaseExpiresAt < new Date()) throw new ApiError('LEASE_EXPIRED');
+    if (workerId && job.workerId !== workerId) throw new ApiError('LEASE_EXPIRED'); // 임대가 만료돼 다른 워커에게 넘어간 작업
     return job;
   }
 
   @Post(':jobId/heartbeat') @HttpCode(200) @Access('worker')
   async heartbeat(@Param('jobId') jobId: string, @Body() body: unknown) {
-    const b = parse(z.object({ progress: z.number().int().min(0).max(100) }), body);
-    const job = await this.leased(jobId);
+    const b = parse(z.object({ progress: z.number().int().min(0).max(100), workerId: z.string().optional() }), body);
+    const job = await this.leased(jobId, b.workerId);
     await this.seen();
     const lease = new Date(Date.now() + LEASE_MS);
     await this.prisma.generationJob.update({ where: { id: job.id }, data: { progress: b.progress, leaseExpiresAt: lease } });
@@ -90,8 +91,8 @@ export class WorkerController {
 
   @Post(':jobId/upload-urls') @HttpCode(201) @Access('worker')
   async uploadUrls(@Param('jobId') jobId: string, @Body() body: unknown) {
-    const b = parse(z.object({ count: z.number().int().min(1).max(32) }), body);
-    await this.leased(jobId);
+    const b = parse(z.object({ count: z.number().int().min(1).max(32), workerId: z.string().optional() }), body);
+    await this.leased(jobId, b.workerId);
     const uploads = await Promise.all(
       Array.from({ length: b.count }, async () => {
         const key = `generated/${jobId}/${randomUUID()}.png`;
@@ -104,21 +105,22 @@ export class WorkerController {
   @Post(':jobId/complete') @HttpCode(200) @Access('worker')
   async complete(@Param('jobId') jobId: string, @Body() body: unknown) {
     const b = parse(
-      z.object({ images: z.array(z.object({ uploadKey: z.string(), label: z.string().max(30).optional() })).min(1).max(32) }),
+      z.object({ images: z.array(z.object({ uploadKey: z.string(), label: z.string().max(30).optional() })).min(1).max(32), workerId: z.string().optional() }),
       body,
     );
-    const job = await this.leased(jobId);
+    const job = await this.leased(jobId, b.workerId);
     const work = job.params as unknown as Work;
     if (b.images.some((i) => !i.uploadKey.startsWith(`generated/${jobId}/`))) throw new ApiError('VALIDATION_ERROR', '이 작업의 업로드 키가 아닙니다.');
 
     // 파일 검증(실제로 올라왔는지, 이미지인지)
-    const images: { key: string; label?: string; thumb?: string }[] = [];
-    for (const i of b.images) {
-      const bytes = await this.storage.readBytes(i.uploadKey).catch(() => null);
-      if (!bytes) throw new ApiError('VALIDATION_ERROR', `업로드되지 않은 파일입니다: ${i.uploadKey}`);
-      if (!sniffImage(bytes)) throw new ApiError('VALIDATION_ERROR', '이미지 파일이 아닙니다.');
-      images.push({ key: i.uploadKey, label: i.label });
-    }
+    const images: { key: string; label?: string }[] = await Promise.all(
+      b.images.map(async (i) => {
+        const bytes = await this.storage.readBytes(i.uploadKey).catch(() => null);
+        if (!bytes) throw new ApiError('VALIDATION_ERROR', `업로드되지 않은 파일입니다: ${i.uploadKey}`);
+        if (!sniffImage(bytes)) throw new ApiError('VALIDATION_ERROR', '이미지 파일이 아닙니다.');
+        return { key: i.uploadKey, label: i.label };
+      }),
+    );
 
     // 인페인트: 마스크 밖은 원본 픽셀로 되돌려 합성한다
     if (job.type === 'INPAINT' && work.maskKey && work.originalKey) {
@@ -162,7 +164,11 @@ export class WorkerController {
         out.push({ id: v.id, key: images[0].key });
       }
       await tx.generationJob.update({ where: { id: job.id }, data: { result: { images: out } as Prisma.InputJsonValue } });
-      await consumeCredits(tx, job.userId, job.creditCost, job.id);
+      // 요청한 장수보다 적게 돌아오면 돌아온 만큼만 과금하고 나머지 예약분은 돌려준다
+      const wanted = Math.max(work.count ?? out.length, 1);
+      const used = Math.min(job.creditCost, Math.round((job.creditCost * out.length) / wanted));
+      await consumeCredits(tx, job.userId, used, job.id);
+      if (job.creditCost - used > 0) await releaseCredits(tx, job.userId, job.creditCost - used, job.id);
       return out;
     });
     await this.notify.send(job.userId, { kind: 'generation', type: 'GENERATION_DONE', title: '이모티콘 생성이 완료되었습니다.', targetType: 'JOB', targetId: job.id });
@@ -172,8 +178,8 @@ export class WorkerController {
 
   @Post(':jobId/fail') @HttpCode(200) @Access('worker')
   async fail(@Param('jobId') jobId: string, @Body() body: unknown) {
-    const b = parse(z.object({ reason: z.enum(['GPU_ERROR', 'OUT_OF_MEMORY', 'CANCELED', 'CONTENT_BLOCKED']), message: z.string().max(500).optional() }), body);
-    const job = await this.leased(jobId);
+    const b = parse(z.object({ reason: z.enum(['GPU_ERROR', 'OUT_OF_MEMORY', 'CANCELED', 'CONTENT_BLOCKED']), message: z.string().max(500).optional(), workerId: z.string().optional() }), body);
+    const job = await this.leased(jobId, b.workerId);
     const status = b.reason === 'CANCELED' ? 'CANCELED' : 'FAILED';
     await this.finish(job, status, b.reason === 'CONTENT_BLOCKED' ? 'CONTENT_BLOCKED' : b.reason === 'CANCELED' ? null : 'PROVIDER_ERROR');
     if (status === 'FAILED') {

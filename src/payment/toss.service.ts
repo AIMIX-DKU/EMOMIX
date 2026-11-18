@@ -39,7 +39,10 @@ export class TossService {
 
   /** PG 에 취소(환불)를 요청한다. 실패하면 PAYMENT_FAILED. */
   async cancel(paymentKey: string, reason: string) {
-    if (this.mock) return;
+    if (this.mock) {
+      if (paymentKey.startsWith('nocancel_')) throw new ApiError('PAYMENT_FAILED', '환불 요청에 실패했습니다.');
+      return;
+    }
     const r = await fetch(`${API}/${encodeURIComponent(paymentKey)}/cancel`, {
       method: 'POST', headers: this.headers(), body: JSON.stringify({ cancelReason: reason.slice(0, 200) }),
     });

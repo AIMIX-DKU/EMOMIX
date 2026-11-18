@@ -30,18 +30,19 @@ export class RewardService {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { status: true } });
     if (user?.status !== 'ACTIVE') return false;
 
-    if (await this.prisma.pointTransaction.findFirst({ where: { userId, rule: ruleKey, refType: ref.type, refId: ref.id } })) return false;
-    const day = startOfDay();
-    if (rule.dailyLimit !== null) {
-      const today = await this.prisma.pointTransaction.count({ where: { userId, rule: ruleKey, type: 'EARN', createdAt: { gte: day } } });
-      if (today >= rule.dailyLimit) return false;
-    }
-    const earned = await this.prisma.pointTransaction.aggregate({
-      _sum: { amount: true }, where: { userId, type: 'EARN', createdAt: { gte: startOfMonth() } },
+    const cap = await this.policy.get('monthlyPointEarnCap');
+    // 같은 사용자의 보상 지급을 직렬화한 뒤 중복·일일·월간 한도를 확인한다(동시 요청으로 한도를 넘기지 못하게)
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'reward:' + userId}))`;
+      if (await tx.pointTransaction.findFirst({ where: { userId, rule: ruleKey, refType: ref.type, refId: ref.id } })) return false;
+      if (rule.dailyLimit !== null) {
+        const today = await tx.pointTransaction.count({ where: { userId, rule: ruleKey, type: 'EARN', createdAt: { gte: startOfDay() } } });
+        if (today >= rule.dailyLimit) return false;
+      }
+      const earned = await tx.pointTransaction.aggregate({ _sum: { amount: true }, where: { userId, type: 'EARN', createdAt: { gte: startOfMonth() } } });
+      if ((earned._sum.amount ?? 0) + rule.points > cap) return false;
+      await pointChange(tx, userId, 'EARN', rule.points, { rule: ruleKey, refType: ref.type, refId: ref.id });
+      return true;
     });
-    if ((earned._sum.amount ?? 0) + rule.points > (await this.policy.get('monthlyPointEarnCap'))) return false;
-
-    await this.prisma.$transaction((tx) => pointChange(tx, userId, 'EARN', rule.points, { rule: ruleKey, refType: ref.type, refId: ref.id }));
-    return true;
   }
 }

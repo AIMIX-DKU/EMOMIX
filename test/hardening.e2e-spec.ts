@@ -121,4 +121,82 @@ describe('보강: 인증 시도 제한·이중 결제·정지 복구·탈퇴 창
       expect((await idemPost(other.c, '/orders', { type: 'PRODUCT', productId })).body.errorCode).toBe('PRODUCT_UNAVAILABLE');
     });
   });
+
+  describe('2차 보강', () => {
+    it('업로드 확정 뒤에는 이전 업로드 URL 로 파일을 바꿔치기할 수 없다', async () => {
+      const { c } = await signedUp(app, ctx.mail);
+      const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+      const p = (await c.post('/uploads/images/presign', { contentType: 'image/png', sizeBytes: png.length, purpose: 'REFERENCE' })).body.data;
+      await fetch(p.uploadUrl, { method: 'PUT', headers: p.uploadHeaders, body: png });
+      const done = await c.post(`/uploads/images/${p.uploadId}/complete`);
+      expect(done.status).toBe(200);
+      await fetch(p.uploadUrl, { method: 'PUT', headers: p.uploadHeaders, body: Buffer.from('악성 내용으로 덮어쓰기 시도........') }); // 확정 뒤 같은 URL 로 재업로드
+      const bytes = Buffer.from(await (await fetch(done.body.data.url)).arrayBuffer());
+      expect(bytes.subarray(1, 4).toString()).toBe('PNG'); // 확정된 파일은 그대로
+    });
+
+    it('로그아웃하면 아직 만료되지 않은 액세스 토큰도 즉시 무효', async () => {
+      const { c, email } = await signedUp(app, ctx.mail);
+      const login = await c.post('/auth/login', { email, password: PASSWORD });
+      const list = login.headers['set-cookie'] as unknown as string[];
+      const pick = (n: string) => list.find((x) => x.startsWith(n + '='))!.split(';')[0];
+      const t = (await c.get('/auth/csrf')).body.data.csrfToken;
+      const cookie = [pick('accessToken'), pick('refreshToken'), `csrfToken=${t}`];
+      expect((await request(app.getHttpServer()).get('/api/v1/users/me').set('Cookie', cookie)).status).toBe(200);
+      expect((await request(app.getHttpServer()).post('/api/v1/auth/logout').set('Cookie', cookie).set('X-CSRF-Token', t)).status).toBe(200);
+      expect((await request(app.getHttpServer()).get('/api/v1/users/me').set('Cookie', cookie)).status).toBe(401); // 같은 액세스 토큰
+    });
+
+    it('비밀번호를 바꾸면 다른 기기의 액세스 토큰이 무효가 되고 현재 기기는 유지된다', async () => {
+      const { c, email } = await signedUp(app, ctx.mail);
+      const other = client(app);
+      await other.post('/auth/login', { email, password: PASSWORD }); // 다른 기기
+      expect((await other.get('/users/me')).status).toBe(200);
+      expect((await c.put('/users/me/password', { currentPassword: PASSWORD, newPassword: 'Changed!pass12' })).status).toBe(200);
+      expect((await c.get('/users/me')).status).toBe(200); // 현재 기기
+      expect((await other.get('/users/me')).status).toBe(401); // 다른 기기
+    });
+
+    it('워커: 일부 이미지만 돌아오면 그만큼만 과금, 다른 워커 ID 는 거부', async () => {
+      const { c } = await signedUp(app, ctx.mail);
+      const { setId } = await readySet(c, w, ['happy']);
+      const before = (await c.get('/wallet')).body.data.credit;
+      const gj = (await idemPost(c, `/sets/${setId}/generations`, { emotions: [{ key: 'sad' }, { key: 'angry' }] })).body.data.jobId; // 비용 2
+      await w.claimJob(gj); // workerId 는 'test-gpu'
+      expect((await w.call(`/${gj}/heartbeat`, { progress: 10, workerId: 'other-gpu' })).body.errorCode).toBe('LEASE_EXPIRED');
+      expect((await w.call(`/${gj}/heartbeat`, { progress: 10, workerId: 'test-gpu' })).status).toBe(200);
+      expect((await w.finish(gj, 1, ['sad'])).status).toBe(200); // 2장 요청, 1장만 반환
+      const after = (await c.get('/wallet')).body.data.credit;
+      expect(before.balance - after.balance).toBe(1); // 1장분만 사용
+      expect(after.reserved).toBe(0);
+      const emos = (await c.get(`/sets/${setId}`)).body.data.emoticons.map((e: { label: string; status: string }) => [e.label, e.status]);
+      expect(emos).toEqual(expect.arrayContaining([['sad', 'READY'], ['angry', 'FAILED']]));
+    });
+
+    it('환불 중 PG 취소가 실패하면 내부 상태도 그대로 유지된다(일관성)', async () => {
+      const { c } = await signedUp(app, ctx.mail);
+      const pkg = (await client(app).get('/credit-packages')).body.data.items.find((p: { credits: number }) => p.credits === 10);
+      const o = (await idemPost(c, '/orders', { type: 'CREDIT_PACKAGE', packageId: pkg.id })).body.data;
+      expect((await pay(c, o.orderNo, pkg.price, 'nocancel_x')).status).toBe(200);
+      expect((await c.get('/wallet')).body.data.credit.balance).toBe(30);
+      expect((await c.post(`/orders/${o.orderNo}/cancel`, { reason: '변심' })).body.errorCode).toBe('PAYMENT_FAILED'); // PG 취소 실패
+      expect((await c.get(`/orders/${o.orderNo}`)).body.data.status).toBe('PAID'); // 롤백됨
+      expect((await c.get('/wallet')).body.data.credit.balance).toBe(30); // 크레딧도 그대로
+    });
+
+    it('일일 생성 한도는 동시에 요청해도 넘지 못한다', async () => {
+      const { c, id } = await signedUp(app, ctx.mail);
+      await ctx.prisma.wallet.update({ where: { userId: id }, data: { creditBalance: 500 } });
+      const ch = (await c.post('/characters', { name: 'a', description: 'b', stylePreset: 'pastel' })).body.data.id;
+      // 한도를 12장으로 낮추고(테스트 동안만), 4장짜리 5건(20장)을 동시에 보낸다 → 3건(12장)까지만 통과해야 한다
+      await ctx.prisma.policy.upsert({ where: { key: 'dailyGenerationLimit' }, create: { key: 'dailyGenerationLimit', value: 12 }, update: { value: 12 } });
+      try {
+        const res = await Promise.all(Array.from({ length: 5 }, (_, i) => idemPost(c, `/characters/${ch}/candidates`, { count: 4, extraPrompt: `p${i}` })));
+        expect(res.filter((r) => r.status === 202)).toHaveLength(3);
+        expect(res.filter((r) => r.status !== 202).every((r) => r.body.errorCode === 'GENERATION_LIMIT_EXCEEDED')).toBe(true);
+      } finally {
+        await ctx.prisma.policy.delete({ where: { key: 'dailyGenerationLimit' } }).catch(() => undefined);
+      }
+    });
+  });
 });

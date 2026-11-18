@@ -67,22 +67,19 @@ export class MarketController {
 
     // 판매 시점의 이미지·워터마크 미리보기·규격을 고정한다
     const id = randomUUID();
-    const snapshot: PreviewItem[] = [];
-    let totalBytes = 0;
-    let width = 0;
-    let height = 0;
-    for (const [i, e] of ready.entries()) {
-      const bytes = await this.storage.readBytes(e.current!.imageKey);
-      totalBytes += bytes.length;
-      if (i === 0) {
-        const d = sniffImage(bytes);
-        width = d?.width ?? 0;
-        height = d?.height ?? 0;
-      }
-      const previewKey = `previews/${id}/${i}.png`;
-      await this.storage.put(previewKey, await watermarkPreview(bytes), 'image/png');
-      snapshot.push({ id: randomUUID(), label: e.label, imageKey: e.current!.imageKey, previewKey });
-    }
+    const files = await Promise.all(
+      ready.map(async (e, i) => {
+        const bytes = await this.storage.readBytes(e.current!.imageKey);
+        const previewKey = `previews/${id}/${i}.png`;
+        await this.storage.put(previewKey, await watermarkPreview(bytes), 'image/png');
+        return { bytes, previewKey, label: e.label, imageKey: e.current!.imageKey };
+      }),
+    );
+    const snapshot: PreviewItem[] = files.map((f) => ({ id: randomUUID(), label: f.label, imageKey: f.imageKey, previewKey: f.previewKey }));
+    const totalBytes = files.reduce((n, f) => n + f.bytes.length, 0);
+    const dim = sniffImage(files[0].bytes);
+    const width = dim?.width ?? 0;
+    const height = dim?.height ?? 0;
     const p = await this.prisma.product.create({
       data: {
         id, creatorId: me.creatorId!, type: b.type, setId: set.id, title: b.title, description: b.description, price: b.price,

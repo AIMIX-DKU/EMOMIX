@@ -63,7 +63,11 @@ export class AccessGuard implements CanActivate {
     }
     const user = await this.prisma.user.findUnique({
       where: { id: claims.sub },
-      select: { id: true, role: true, status: true, suspendedUntil: true, creator: { select: { id: true, status: true } } },
+      select: {
+        id: true, role: true, status: true, suspendedUntil: true, creator: { select: { id: true, status: true } },
+        // 이 기기의 세션(refresh 가족)이 폐기됐으면 액세스 토큰이 남아 있어도 거부한다
+        refreshTokens: { where: { familyId: claims.fam, revokedAt: null, expiresAt: { gt: new Date() } }, select: { id: true }, take: 1 },
+      },
     });
     const status = user ? await effectiveStatus(this.prisma, user) : null;
     if (!user || status === 'WITHDRAWN') {
@@ -73,6 +77,11 @@ export class AccessGuard implements CanActivate {
     if (status === 'SUSPENDED') {
       if (level === 'optional') return true;
       throw new ApiError('ACCOUNT_SUSPENDED');
+    }
+    // 이 기기의 세션이 폐기됐으면(로그아웃·비밀번호 변경 등) 액세스 토큰이 남아 있어도 거부
+    if (user.refreshTokens.length === 0) {
+      if (level === 'optional') return true;
+      throw new ApiError('UNAUTHORIZED');
     }
     req.me = { id: user.id, role: user.role, fam: claims.fam, creatorId: user.creator?.status === 'ACTIVE' ? user.creator.id : undefined };
 

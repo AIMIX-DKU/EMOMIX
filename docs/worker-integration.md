@@ -58,10 +58,11 @@ loop:
 작업을 받으면 **2분의 임대 시간**이 생깁니다. `heartbeat` 를 호출할 때마다 2분씩 연장됩니다.
 임대가 끝나도록 호출이 없으면 작업은 자동으로 대기열로 돌아가 다른 워커가 가져가고(최대 3회 시도), 3회 모두 실패하면 `TIMEOUT` 으로 실패 처리됩니다.
 
-`POST /worker/jobs/{jobId}/heartbeat` — `{ "progress": 40 }` → `{ "leaseExpiresAt": "…", "cancelRequested": false }`
+`POST /worker/jobs/{jobId}/heartbeat` — `{ "progress": 40, "workerId": "gpu-01" }` → `{ "leaseExpiresAt": "…", "cancelRequested": false }`
 
 - 이미지 한 장이 오래 걸리면 **30~60초마다** 호출하세요.
 - 이미 임대가 끝난 작업에 호출하면 `409 LEASE_EXPIRED`. 이때는 작업을 버리고 다음 `claim` 으로 가세요.
+- `heartbeat`·`upload-urls`·`complete`·`fail` 요청에 `claim` 때 보낸 **`workerId` 를 함께 보내는 것을 권장**합니다(선택 필드). 보내면 임대한 워커와 같은지 검사해서, 임대가 만료돼 다른 워커에게 넘어간 작업을 이전 워커가 건드리지 못합니다.
 
 ## 3. 결과 올리기
 
@@ -71,7 +72,7 @@ loop:
 ```json
 { "images": [ { "uploadKey": "…", "label": "happy" }, { "uploadKey": "…", "label": "thanks" } ] }
 ```
-`label` 은 `EMOTION_SET` 에서 `params.items[].label` 과 같은 값을 넣습니다(생략하면 순서대로 매칭). 서버가 파일이 실제 이미지인지 검사하고, 크레딧을 확정합니다.
+`label` 은 `EMOTION_SET` 에서 `params.items[].label` 과 같은 값을 넣습니다(생략하면 순서대로 매칭). 서버가 파일이 실제 이미지인지 검사하고, 크레딧을 확정합니다. **요청한 장수보다 적게 돌아오면 돌아온 장수만큼만 과금**하고 나머지는 반환합니다(못 만든 이모티콘은 실패 상태가 되어 사용자가 재생성할 수 있습니다).
 
 ## 4. 실패 보고
 

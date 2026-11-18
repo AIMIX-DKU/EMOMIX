@@ -68,13 +68,6 @@ export class GenerationService {
     const texts = [s.work.prompt, ...(s.work.items ?? []).map((i) => i.prompt)];
     if (texts.some((t) => t && isBlocked(t))) throw new ApiError('CONTENT_BLOCKED');
 
-    const start = startOfDay();
-    const today = await this.prisma.generationJob.findMany({
-      where: { userId: s.userId, createdAt: { gte: start }, status: { notIn: ['CANCELED', 'FAILED'] } },
-      select: { params: true },
-    });
-    const used = today.reduce((n, j) => n + ((j.params as { count?: number }).count ?? 1), 0);
-    if (used + s.count > (await this.policy.get('dailyGenerationLimit'))) throw new ApiError('GENERATION_LIMIT_EXCEEDED');
     if ((await this.prisma.generationJob.count({ where: { status: 'QUEUED' } })) >= (await this.policy.get('maxQueueLength'))) {
       throw new ApiError('GENERATION_QUEUE_FULL');
     }
@@ -82,6 +75,14 @@ export class GenerationService {
     let job: GenerationJob;
     try {
       job = await this.prisma.$transaction(async (tx) => {
+        // 같은 사용자의 동시 요청을 줄 세운 뒤 오늘 사용량을 확인한다
+        await tx.$queryRaw`SELECT "userId" FROM "Wallet" WHERE "userId" = ${s.userId} FOR UPDATE`;
+        const today = await tx.generationJob.findMany({
+          where: { userId: s.userId, createdAt: { gte: startOfDay() }, status: { notIn: ['CANCELED', 'FAILED'] } },
+          select: { params: true },
+        });
+        const used = today.reduce((n, j) => n + ((j.params as { count?: number }).count ?? 1), 0);
+        if (used + s.count > (await this.policy.get('dailyGenerationLimit'))) throw new ApiError('GENERATION_LIMIT_EXCEEDED');
         const created = await tx.generationJob.create({
           data: {
             userId: s.userId, type: s.type, targetType: s.targetType, targetId: s.targetId, creditCost: s.cost,
@@ -93,6 +94,8 @@ export class GenerationService {
         return created;
       });
     } catch (e) {
+      // 같은 사용자의 요청이 한꺼번에 몰려 잠금 대기가 트랜잭션 제한을 넘기면 서버 오류 대신 '요청 과다'로 안내한다
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2028') throw new ApiError('RATE_LIMITED');
       // 같은 키 동시 요청: 먼저 들어간 작업을 돌려준다
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         const again = await this.prisma.generationJob.findUnique({
