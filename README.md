@@ -2,6 +2,7 @@
 
 AI 이모티콘 플랫폼 EmoMix의 백엔드. NestJS 12 + Prisma 6 + PostgreSQL(Neon) + Neon Object Storage(S3 호환), Vercel 서버리스 배포.
 
+- **기준 문서는 Notion(팀플 / EmoMix API 명세서, GPU 워커 연동 가이드)입니다.** 아래 `docs/` 파일은 Postman 가져오기와 자동 점검용 사본이라 Notion과 다를 수 있습니다.
 - API 명세: [`docs/openapi.yaml`](docs/openapi.yaml) (Postman으로 Import 가능), [`docs/conventions.md`](docs/conventions.md)(응답 포맷·에러 코드·인증), [`docs/endpoints.md`](docs/endpoints.md)(전체 135개 목록)
 - GPU 워커 연동: [`docs/worker-integration.md`](docs/worker-integration.md)
 
