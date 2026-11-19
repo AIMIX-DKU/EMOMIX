@@ -7,7 +7,8 @@ import { ApiError } from '../common/envelope.js';
 import { PolicyService } from '../common/policy.service.js';
 import { StorageService } from '../common/storage.service.js';
 import { startOfDay } from '../common/reward.service.js';
-import { reserveCredits } from '../common/wallet.js';
+import { reserveCredits, totalCredits } from '../common/wallet.js';
+import { PlanService } from '../subscription/plan.service.js';
 
 /** 시제품용 금칙어(소문자 비교). 운영에서는 Policy 로 옮기거나 검수 모델로 교체한다. */
 const BLOCKED = ['porn', 'nude', 'sex', 'gore', '포르노', '야동', '나체', '성기', '자살', '학살'];
@@ -45,6 +46,7 @@ export class GenerationService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(PolicyService) private readonly policy: PolicyService,
     @Inject(StorageService) private readonly storage: StorageService,
+    @Inject(PlanService) private readonly plans: PlanService,
   ) {}
 
   costOf(type: JobType, count: number) {
@@ -72,6 +74,7 @@ export class GenerationService {
       throw new ApiError('GENERATION_QUEUE_FULL');
     }
 
+    const plan = await this.plans.effective(s.userId); // 구독 요금제에 따른 일일 한도와 우선순위
     let job: GenerationJob;
     try {
       job = await this.prisma.$transaction(async (tx) => {
@@ -82,11 +85,11 @@ export class GenerationService {
           select: { params: true },
         });
         const used = today.reduce((n, j) => n + ((j.params as { count?: number }).count ?? 1), 0);
-        if (used + s.count > (await this.policy.get('dailyGenerationLimit'))) throw new ApiError('GENERATION_LIMIT_EXCEEDED');
+        if (used + s.count > plan.dailyGenerationLimit) throw new ApiError('GENERATION_LIMIT_EXCEEDED');
         const created = await tx.generationJob.create({
           data: {
             userId: s.userId, type: s.type, targetType: s.targetType, targetId: s.targetId, creditCost: s.cost,
-            idempotencyKey: s.idempotencyKey, params: { ...s.work, _hash: hash } as unknown as Prisma.InputJsonValue,
+            priority: plan.priorityQueue ? 1 : 0, idempotencyKey: s.idempotencyKey, params: { ...s.work, _hash: hash } as unknown as Prisma.InputJsonValue,
           },
         });
         if (s.prepare) await s.prepare(tx, created.id);
@@ -127,14 +130,16 @@ export class GenerationService {
     const w = await this.prisma.wallet.findUnique({ where: { userId } });
     const ahead = await this.prisma.generationJob.count({ where: { status: { in: ['QUEUED', 'RUNNING'] } } });
     return {
-      creditCost: cost, creditBalance: w?.creditBalance ?? 0, sufficient: (w?.creditBalance ?? 0) >= cost,
+      creditCost: cost, creditBalance: w ? totalCredits(w) : 0, sufficient: (w ? totalCredits(w) : 0) >= cost,
       estimatedWaitSeconds: (ahead + 1) * 5 + count * 4,
     };
   }
 
   async queuePosition(job: GenerationJob) {
     if (job.status !== 'QUEUED') return 0;
-    return 1 + (await this.prisma.generationJob.count({ where: { status: 'QUEUED', createdAt: { lt: job.createdAt } } }));
+    return 1 + (await this.prisma.generationJob.count({
+      where: { status: 'QUEUED', OR: [{ priority: { gt: job.priority } }, { priority: job.priority, createdAt: { lt: job.createdAt } }] },
+    }));
   }
 
   async view(job: GenerationJob) {

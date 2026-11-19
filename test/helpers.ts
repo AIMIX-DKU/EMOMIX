@@ -110,6 +110,8 @@ export async function cleanup(prisma: PrismaService, storage?: StorageService, e
       prisma.sellerLedger.deleteMany({ where: { creatorId: { in: cids } } }),
       prisma.creator.deleteMany({ where: { id: { in: cids } } }),
       prisma.refreshToken.deleteMany({ where: { userId: { in: ids } } }),
+      prisma.subscriptionInvoice.deleteMany({ where: { userId: { in: ids } } }),
+      prisma.subscription.deleteMany({ where: { userId: { in: ids } } }),
       prisma.creditTransaction.deleteMany({ where: { userId: { in: ids } } }),
       prisma.pointTransaction.deleteMany({ where: { userId: { in: ids } } }),
       prisma.wallet.deleteMany({ where: { userId: { in: ids } } }),
