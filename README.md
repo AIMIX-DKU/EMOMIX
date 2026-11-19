@@ -37,7 +37,9 @@ npm run start:dev           # http://localhost:3000/api/v1/health
 ```bash
 node scripts/check-infra.mjs     # Neon 스토리지·SMTP 연결 점검
 npm run build && node scripts/check-routes.mjs   # 명세 135개 엔드포인트와 구현 일치 여부
-npm run test:e2e                 # e2e 테스트(실제 DB·스토리지 사용, e2e- 접두 계정 생성 후 정리)
+npm run test:e2e                 # e2e 테스트. .env.test(테스트 전용 Neon 브랜치)가 있으면 그 DB를 쓰고, 없으면 .env 의 DB를 쓴다.
+                                 # 실제 DB·스토리지를 쓰고 e2e- 접두 계정을 만든 뒤 정리한다. 느리니 바꾼 영역의 spec 파일만 지정해 돌릴 것:
+                                 #   npm run test:e2e -- test/subscription.e2e-spec.ts
 ```
 테스트는 `MAIL_DRY=1`(메일 미발송), `TOSS_MOCK=1`(결제 승인 가짜 처리, 운영에서는 무시됨)로 동작합니다.
 
