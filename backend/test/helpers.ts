@@ -9,6 +9,8 @@ import type { StorageService } from '../src/common/storage.service.js';
 import { randomUUID } from 'node:crypto';
 
 process.env.MAIL_DRY = '1';
+// 웹훅 서명 검증용 비밀값: 토스 키가 없는 환경(CI)에서도 서버와 테스트가 같은 값을 쓰도록 채워 둔다
+process.env.TOSS_WEBHOOK_SECRET = process.env.TOSS_WEBHOOK_SECRET || process.env.TOSS_SECRET_KEY || 'e2e-webhook-secret';
 process.env.TOSS_MOCK = '1'; // 토스 결제 승인/취소를 가짜로 처리(운영에서는 무시됨)
 
 export async function createApp() {
