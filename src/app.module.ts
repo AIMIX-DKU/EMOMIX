@@ -11,10 +11,11 @@ import { CommunityModule } from './community/community.module.js';
 import { MarketModule } from './market/market.module.js';
 import { PaymentModule } from './payment/payment.module.js';
 import { AdminModule } from './admin/admin.module.js';
+import { SubscriptionModule } from './subscription/subscription.module.js';
 import { HealthController } from './health.controller.js';
 
 @Module({
-  imports: [CommonModule, AuthModule, UsersModule, GenerationModule, WalletModule, CommunityModule, MarketModule, PaymentModule, AdminModule],
+  imports: [CommonModule, AuthModule, UsersModule, GenerationModule, WalletModule, CommunityModule, MarketModule, PaymentModule, AdminModule, SubscriptionModule],
   controllers: [HealthController],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: EnvelopeInterceptor },

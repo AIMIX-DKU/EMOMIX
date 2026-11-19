@@ -6,7 +6,7 @@ import { IdempotencyService } from '../common/idempotency.service.js';
 import { PolicyService } from '../common/policy.service.js';
 import { startOfMonth, startOfNextMonth } from '../common/reward.service.js';
 import { parse, pageOf, pageResult, z } from '../common/validate.js';
-import { creditChange, pointChange } from '../common/wallet.js';
+import { creditChange, pointChange, settleSubscriptionExpiry, subAvailable, totalCredits } from '../common/wallet.js';
 import { PrismaService } from '../prisma.service.js';
 
 /** 내부 enum → API 표기. TRIAL(가입 체험)은 GRANT, 운영자 지급 GRANT 는 ADMIN_GRANT 로 보여준다. */
@@ -34,10 +34,14 @@ export class WalletController {
 
   @Get('wallet') @Access('user')
   async wallet(@CurrentUser() me: Me) {
+    await this.prisma.$transaction((tx) => settleSubscriptionExpiry(tx, me.id)); // 기간이 지난 구독 크레딧은 소멸 처리
     const w = await this.prisma.wallet.findUnique({ where: { userId: me.id } });
     const m = await this.monthly(me.id);
     return {
-      credit: { balance: w?.creditBalance ?? 0, reserved: w?.creditReserved ?? 0 },
+      credit: {
+        balance: w ? totalCredits(w) : 0, reserved: w?.creditReserved ?? 0, subscriptionBalance: w ? subAvailable(w) : 0,
+        subscriptionExpiresAt: w && subAvailable(w) > 0 ? w.subscriptionExpiresAt : null,
+      },
       activityPoint: {
         balance: w?.pointBalance ?? 0, monthlyEarned: m.earned, monthlyEarnCap: await this.policy.get('monthlyPointEarnCap'),
         monthlyExchanged: m.exchanged, monthlyExchangeCap: await this.policy.get('monthlyPointExchangeCap'), resetAt: startOfNextMonth(),
@@ -50,7 +54,7 @@ export class WalletController {
     const p = pageOf(q);
     const where: Prisma.CreditTransactionWhereInput = { userId: me.id };
     if (q.type) {
-      const t = parse(z.enum(['PURCHASE', 'GRANT', 'EXCHANGE', 'RESERVE', 'CONSUME', 'RELEASE', 'REFUND', 'ADMIN_GRANT']), q.type);
+      const t = parse(z.enum(['PURCHASE', 'GRANT', 'EXCHANGE', 'RESERVE', 'CONSUME', 'RELEASE', 'REFUND', 'ADMIN_GRANT', 'SUBSCRIPTION_GRANT', 'SUBSCRIPTION_EXPIRE']), q.type);
       // GRANT(가입 체험 등)와 ADMIN_GRANT 를 구분해 조회한다
       where.type = (CREDIT_IN[t] ?? t) as never;
     }

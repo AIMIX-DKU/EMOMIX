@@ -84,4 +84,6 @@
 | `BELOW_MINIMUM` | 400 | 최소 요청 단위보다 작습니다. |
 | `INSUFFICIENT_BALANCE` | 409 | 잔액이 부족합니다. |
 | `DUPLICATED_REPORT` | 409 | 이미 신고한 대상입니다. |
+| `ALREADY_SUBSCRIBED` | 409 | 이미 구독 중입니다. |
+| `NOT_SUBSCRIBED` | 404 | 구독 중이 아닙니다. |
 | `LEASE_EXPIRED` | 409 | 작업 임대가 만료되었거나 다른 워커에 배정되었습니다. |

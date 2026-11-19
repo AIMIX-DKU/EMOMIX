@@ -65,6 +65,7 @@ model User {
   following     Follow[]        @relation("Follower")
   followers     Follow[]        @relation("Followee")
   donationsSent Donation[]      @relation("DonationSender")
+  subscription  Subscription?
 }
 
 model Identity {
@@ -290,6 +291,8 @@ model GenerationJob {
   errorCode       String?
   result          Json?
   attempts        Int        @default(0)
+  priority        Int        @default(0) // 구독 우선 처리(1)
+  subCreditsUsed  Int        @default(0) // 예약한 크레딧 중 구독 크레딧에서 나온 양(반환 때 되돌릴 곳)
   workerId        String?
   leaseExpiresAt  DateTime?
   cancelRequested Boolean    @default(false)
@@ -519,6 +522,7 @@ enum OrderType {
   PRODUCT
   CREDIT_PACKAGE
   DONATION
+  SUBSCRIPTION
 }
 
 enum OrderStatus {
@@ -594,11 +598,13 @@ model Donation {
 
 // ───────────── 지갑: 크레딧 / 활동 포인트 / 판매자 장부 ─────────────
 model Wallet {
-  user           User   @relation(fields: [userId], references: [id])
-  userId         String @id
-  creditBalance  Int    @default(0) // 사용 가능
-  creditReserved Int    @default(0) // 생성 작업에 예약된 양
-  pointBalance   Int    @default(0)
+  user                  User      @relation(fields: [userId], references: [id])
+  userId                String    @id
+  creditBalance         Int       @default(0) // 사용 가능
+  creditReserved        Int       @default(0) // 생성 작업에 예약된 양
+  subscriptionCredits   Int       @default(0) // 구독으로 받은 크레딧(이월 없음). creditBalance 와 별도로 센다
+  subscriptionExpiresAt DateTime?
+  pointBalance          Int       @default(0)
 }
 
 enum CreditTxType {
@@ -610,6 +616,8 @@ enum CreditTxType {
   CONSUME
   RELEASE
   REFUND
+  SUBSCRIPTION_GRANT
+  SUBSCRIPTION_EXPIRE
 }
 
 model CreditTransaction {
@@ -757,4 +765,64 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// ───────────── 구독 ─────────────
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+model SubscriptionPlan {
+  code                 String  @id // STANDARD | PRO (FREE 는 DB 행 없이 코드/정책으로 처리)
+  name                 String
+  price                Int
+  monthlyCredits       Int
+  dailyGenerationLimit Int
+  priorityQueue        Boolean
+  sellerFeeRate        Float
+  sortOrder            Int     @default(0)
+  active               Boolean @default(true)
+}
+
+model Subscription {
+  id                 String             @id @default(uuid())
+  user               User               @relation(fields: [userId], references: [id])
+  userId             String             @unique
+  planCode           String
+  scheduledPlanCode  String?
+  status             SubscriptionStatus @default(ACTIVE)
+  billingKey         String // 토스 빌링키(카드번호는 저장하지 않는다)
+  cardCompany        String?
+  cardNumberMasked   String?
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  nextBillingAt      DateTime?
+  cancelAtPeriodEnd  Boolean            @default(false)
+  failedAttempts     Int                @default(0)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  invoices SubscriptionInvoice[]
+
+  @@index([status, nextBillingAt])
+}
+
+model SubscriptionInvoice {
+  id             String       @id @default(uuid())
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+  subscriptionId String
+  userId         String
+  orderNo        String? // 성공한 결제의 주문번호
+  planCode       String
+  periodStart    DateTime
+  periodEnd      DateTime
+  amount         Int
+  status         String // PAID | FAILED
+  failReason     String?
+  creditsGranted Int          @default(0)
+  createdAt      DateTime     @default(now())
+
+  @@index([userId, createdAt])
 }

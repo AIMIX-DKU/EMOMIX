@@ -10,7 +10,7 @@ import { verifyAccess } from './tokens.js';
 
 /** none: 누구나 / optional: 로그인하면 사용자 정보 제공 / user·creator·admin: 쿠키 로그인 필요
  *  refresh·ticket: 컨트롤러가 직접 검증(CSRF 는 가드가 검사) / webhook: PG 서명을 컨트롤러가 검증 / worker: X-Worker-Key */
-export type AccessLevel = 'none' | 'optional' | 'user' | 'creator' | 'admin' | 'refresh' | 'ticket' | 'webhook' | 'worker';
+export type AccessLevel = 'none' | 'optional' | 'user' | 'creator' | 'admin' | 'refresh' | 'ticket' | 'webhook' | 'worker' | 'cron';
 export const Access = (level: AccessLevel) => SetMetadata('access', level);
 
 export interface Me {
@@ -47,6 +47,13 @@ export class AccessGuard implements CanActivate {
       const key = env('WORKER_API_KEY');
       const given = String(req.headers['x-worker-key'] ?? '');
       if (!key || !safeEqual(key, given)) throw new ApiError('UNAUTHORIZED', '워커 인증에 실패했습니다.');
+      return true;
+    }
+    if (level === 'cron') {
+      // Vercel Cron 은 CRON_SECRET 환경변수 값을 Authorization: Bearer 로 붙여 호출한다
+      const secret = env('CRON_SECRET');
+      const given = String(req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+      if (!secret || !safeEqual(secret, given)) throw new ApiError('UNAUTHORIZED', '크론 인증에 실패했습니다.');
       return true;
     }
     if (level === 'webhook') return true;

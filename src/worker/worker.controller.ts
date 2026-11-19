@@ -54,7 +54,7 @@ export class WorkerController {
         "startedAt" = now(), attempts = attempts + 1, progress = 0
       WHERE id = (
         SELECT id FROM "GenerationJob" WHERE status = 'QUEUED' AND type::text = ANY(${types})
-        ORDER BY "createdAt" ASC FOR UPDATE SKIP LOCKED LIMIT 1
+        ORDER BY priority DESC, "createdAt" ASC FOR UPDATE SKIP LOCKED LIMIT 1
       ) RETURNING id`;
     if (!rows.length) return { job: null };
     const job = await this.prisma.generationJob.findUniqueOrThrow({ where: { id: rows[0].id } });

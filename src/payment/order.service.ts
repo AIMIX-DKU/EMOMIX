@@ -6,6 +6,7 @@ import { NotifyService } from '../common/notify.service.js';
 import { PolicyService } from '../common/policy.service.js';
 import { RewardService } from '../common/reward.service.js';
 import { creditChange } from '../common/wallet.js';
+import { PlanService } from '../subscription/plan.service.js';
 import { PrismaService } from '../prisma.service.js';
 import { ledgerAdd, revokePoints } from './ledger.js';
 import { TossService, type TossPayment } from './toss.service.js';
@@ -27,6 +28,7 @@ export class OrderService {
     @Inject(NotifyService) private readonly notify: NotifyService,
     @Inject(RewardService) private readonly reward: RewardService,
     @Inject(TossService) private readonly toss: TossService,
+    @Inject(PlanService) private readonly plans: PlanService,
   ) {}
 
   /** 결제 기한이 지난 대기 주문을 EXPIRED 로 바꾼다(크론 없이 조회 시점에 처리). */
@@ -38,9 +40,14 @@ export class OrderService {
     return o;
   }
 
-  create(userId: string, data: { type: 'PRODUCT' | 'CREDIT_PACKAGE' | 'DONATION'; orderName: string; amount: number; productId?: string; creditPackageId?: string }, tx?: Prisma.TransactionClient) {
+  create(
+    userId: string,
+    data: { type: 'PRODUCT' | 'CREDIT_PACKAGE' | 'DONATION' | 'SUBSCRIPTION'; orderName: string; amount: number; productId?: string; creditPackageId?: string; orderNo?: string },
+    tx?: Prisma.TransactionClient,
+  ) {
+    const { orderNo, ...rest } = data;
     return (tx ?? this.prisma).order.create({
-      data: { orderNo: newOrderNo(), userId, expiresAt: new Date(Date.now() + ORDER_TTL_MS), ...data },
+      data: { orderNo: orderNo ?? newOrderNo(), userId, expiresAt: new Date(Date.now() + ORDER_TTL_MS), ...rest },
     });
   }
 
@@ -56,7 +63,6 @@ export class OrderService {
         throw new ApiError('ALREADY_PURCHASED');
       }
     }
-    const fee = await this.policy.get('sellerFeeRate');
     const out = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.order.updateMany({ where: { id: order.id, status: 'PENDING_PAYMENT' }, data: { status: 'PAID', paidAt: new Date() } });
       if (claimed.count !== 1) throw new ApiError('ORDER_NOT_PENDING');
@@ -76,7 +82,8 @@ export class OrderService {
           create: { userId: order.userId, productId: p.id, orderId: order.id },
           update: { orderId: order.id, refundedAt: null, accessedAt: null },
         });
-        const feeAmount = Math.round(order.amount * fee);
+        const feeRate = (await this.plans.effective(p.creator.userId)).sellerFeeRate; // 판매자의 구독 요금제에 따른 수수료율
+        const feeAmount = Math.round(order.amount * feeRate);
         await ledgerAdd(tx, p.creatorId, 'SALE', order.amount, { type: 'ORDER', id: order.id });
         await ledgerAdd(tx, p.creatorId, 'FEE', -feeAmount, { type: 'ORDER', id: order.id });
         await tx.product.update({ where: { id: p.id }, data: { salesCount: { increment: 1 } } });
@@ -119,6 +126,7 @@ export class OrderService {
   async refundBlocker(o: Order): Promise<string | null> {
     if (o.status !== 'PAID') return '결제 완료된 주문만 환불할 수 있습니다.';
     if (o.type === 'DONATION') return '후원은 환불하지 않습니다.';
+    if (o.type === 'SUBSCRIPTION') return '구독 결제는 환불하지 않습니다. 해지하면 다음 결제만 멈춥니다.';
     if (o.type === 'PRODUCT') {
       if (Date.now() - (o.paidAt?.getTime() ?? 0) > REFUND_WINDOW_MS) return '결제 후 7일이 지났습니다.';
       const pu = await this.prisma.purchase.findFirst({ where: { orderId: o.id } });

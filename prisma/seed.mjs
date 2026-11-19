@@ -69,6 +69,19 @@ for (const [name, credits, bonusCredits, price] of packages) {
 }
 await prisma.rewardRule.deleteMany({ where: { key: { notIn: rewards.map((r) => r[0]) } } });
 
+// 구독 요금제(FREE 는 DB 행 없이 운영 정책 값을 쓴다). 값은 Notion 명세의 요금제 표와 같다.
+const plans = [
+  ['STANDARD', '스탠다드', 4900, 70, 100, true, 0.15, 1],
+  ['PRO', '프로', 9900, 160, 200, true, 0.1, 2],
+];
+for (const [code, name, price, monthlyCredits, dailyGenerationLimit, priorityQueue, sellerFeeRate, sortOrder] of plans) {
+  await prisma.subscriptionPlan.upsert({
+    where: { code },
+    create: { code, name, price, monthlyCredits, dailyGenerationLimit, priorityQueue, sellerFeeRate, sortOrder },
+    update: { name, price, monthlyCredits, dailyGenerationLimit, priorityQueue, sellerFeeRate, sortOrder },
+  });
+}
+
 const adminEmail = (process.env.ADMIN_EMAIL ?? '').toLowerCase();
 if (adminEmail && process.env.ADMIN_PASSWORD) {
   const passwordHash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);

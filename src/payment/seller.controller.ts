@@ -4,6 +4,7 @@ import { Access, CurrentUser, type Me } from '../common/access.js';
 import { ApiError } from '../common/envelope.js';
 import { IdempotencyService } from '../common/idempotency.service.js';
 import { PolicyService } from '../common/policy.service.js';
+import { PlanService } from '../subscription/plan.service.js';
 import { StorageService } from '../common/storage.service.js';
 import { parse, pageOf, pageResult, z } from '../common/validate.js';
 import { PrismaService } from '../prisma.service.js';
@@ -16,6 +17,7 @@ export class SellerController {
     @Inject(PolicyService) private readonly policy: PolicyService,
     @Inject(StorageService) private readonly storage: StorageService,
     @Inject(IdempotencyService) private readonly idem: IdempotencyService,
+    @Inject(PlanService) private readonly plans: PlanService,
   ) {}
 
   @Get('products') @Access('creator')
@@ -89,7 +91,7 @@ export class SellerController {
     const b = await this.balances(me.creatorId!);
     return {
       availableAmount: b.available, pendingAmount: b.pending, totalEarned: b.earned,
-      feeRate: await this.policy.get('sellerFeeRate'), minSettlementAmount: await this.policy.get('minSettlementAmount'),
+      feeRate: (await this.plans.effective(me.id)).sellerFeeRate, minSettlementAmount: await this.policy.get('minSettlementAmount'),
     };
   }
 

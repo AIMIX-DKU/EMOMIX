@@ -137,3 +137,12 @@
 | 133 | Worker | 결과 업로드 URL 발급 | POST | `/api/v1/worker/jobs/{jobId}/upload-urls` | worker |
 | 134 | Worker | 작업 완료 보고 | POST | `/api/v1/worker/jobs/{jobId}/complete` | worker |
 | 135 | Worker | 작업 실패 보고 | POST | `/api/v1/worker/jobs/{jobId}/fail` | worker |
+| 136 | Subscription | 구독 요금제 조회 | GET | `/api/v1/subscription-plans` | none |
+| 137 | Subscription | 내 구독 조회 | GET | `/api/v1/subscriptions/me` | user |
+| 138 | Subscription | 구독 시작 | POST | `/api/v1/subscriptions` | user |
+| 139 | Subscription | 구독 요금제 변경 예약 | PATCH | `/api/v1/subscriptions/me` | user |
+| 140 | Subscription | 구독 해지 | DELETE | `/api/v1/subscriptions/me` | user |
+| 141 | Subscription | 구독 해지 취소 | POST | `/api/v1/subscriptions/me/resume` | user |
+| 142 | Subscription | 결제 카드 변경 | PUT | `/api/v1/subscriptions/me/payment-method` | user |
+| 143 | Subscription | 구독 결제 내역 조회 | GET | `/api/v1/subscriptions/me/invoices` | user |
+| 144 | Subscription | 정기결제 실행(크론) | GET | `/api/v1/internal/billing/run` | cron |

@@ -3,7 +3,7 @@
   "info": {
     "title": "EmoMix API",
     "version": "0.1.0",
-    "description": "# EmoMix API 컨벤션\n\n## 기본\n- Base URL: `/api/v1`, 모든 본문은 JSON(UTF-8). 파일은 API 서버를 거치지 않고 presigned URL로 스토리지에 직접 PUT 한다(서버리스 요청 본문 한도 때문).\n- 필드명 camelCase, 시간은 ISO-8601 UTC, ID는 문자열(UUID), 금액은 원(KRW) 정수.\n- 목록은 `page`(0부터)·`size`(기본 20, 최대 50) 쿼리, 응답은 `data.items[] + page,size,totalElements,totalPages`.\n\n## 공통 응답 포맷\n항상 `{ success, message, data, errorCode }`.\n- 성공: `success: true`, `data`에 값, `errorCode: null`\n- 실패: `success: false`, `data: null`, `errorCode`에 아래 문자열 코드, `message`는 사용자에게 보여줄 수 있는 한글 문장\n- 검증 실패의 필드별 상세는 아직 정하지 않음(우선 message 한 줄).\n\n## 인증 (쿠키 기반)\n| 쿠키 | 속성 | 수명 | 용도 |\n| --- | --- | --- | --- |\n| `accessToken` | HttpOnly, Secure, SameSite=Lax, Path=/ | 15분 | JWT. 모든 인증 API |\n| `refreshToken` | HttpOnly, Secure, SameSite=Lax, Path=/api/v1/auth | 14일 | 재발급 전용. 서버에 해시 저장, 사용 시마다 회전, 재사용 감지 시 전체 폐기 |\n| `csrfToken` | Secure, SameSite=Lax (JS 읽기 가능) | 세션 | `GET /auth/csrf`로 발급 |\n| `signupTicket` | HttpOnly, Secure, 10분 | 10분 | Discord 최초 로그인 후 가입 완료 전용 |\n\n- 상태를 바꾸는 요청(POST/PUT/PATCH/DELETE)은 `X-CSRF-Token` 헤더에 csrfToken 쿠키 값을 넣는다. 서버는 Origin 검증도 함께 한다.\n- 프론트와 API는 같은 사이트(예: app.example.com / api.example.com)에 둔다.\n- 토큰은 응답 body에 절대 싣지 않는다.\n- 소셜 로그인은 Discord Authorization Code 리다이렉트 방식. 이미 이메일로 가입된 이메일로 Discord를 시도하면 계정을 새로 만들지 않고 `ACCOUNT_LINK_REQUIRED`.\n\n## 멱등성\n돈·크레딧·생성이 걸린 POST는 `Idempotency-Key`(UUID) 헤더 필수: 생성 작업, 주문, 결제 승인, 후원, 포인트 교환.\n\n## 두 종류의 포인트와 판매 장부\n- **크레딧(credit)**: AI 생성에 쓰는 이용권. 구매·체험·운영자 지급·활동 포인트 교환으로 획득. 요청 시 예약 → 성공 시 확정 → 실패 시 반환.\n- **활동 포인트(activity point)**: 커뮤니티 활동·거래로 획득. 현금화 불가. 월간 획득 한도와 월간 크레딧 교환 한도가 있음.\n- **판매자 매출**: 두 포인트와 섞지 않고 별도 장부(`/seller/ledger`)로 관리. 시제품 단계의 정산은 모의 처리.\n- 후원(donation)은 혜택 없는 응원금이고 구매(order)와 흐름이 다르다. 후원은 환불하지 않는다.\n\n## 에러 코드\n공통: 400 `VALIDATION_ERROR`, 401 `UNAUTHORIZED`, 403 `FORBIDDEN`/`CSRF_INVALID`, 404 `NOT_FOUND`, 409 `DUPLICATED`/`IDEMPOTENCY_CONFLICT`, 429 `RATE_LIMITED`, 500 `SERVER_ERROR`. 도메인 세부 코드는 공통 코드로 표현이 안 될 때만 의미가 분명한 이름으로 추가했다(전체는 아래).\n\n| Code | HTTP | 메시지 |\n| --- | --- | --- |\n| `VALIDATION_ERROR` | 400 | 요청 값이 올바르지 않습니다. |\n| `UNAUTHORIZED` | 401 | 로그인이 필요합니다. |\n| `CSRF_INVALID` | 403 | CSRF 검증에 실패했습니다. |\n| `FORBIDDEN` | 403 | 접근 권한이 없습니다. |\n| `NOT_FOUND` | 404 | 존재하지 않는 리소스입니다. |\n| `DUPLICATED` | 409 | 이미 존재합니다. |\n| `RATE_LIMITED` | 429 | 요청이 너무 많습니다. 잠시 후 다시 시도해주세요. |\n| `IDEMPOTENCY_CONFLICT` | 409 | 같은 Idempotency-Key로 다른 요청이 처리 중이거나 완료되었습니다. |\n| `SERVER_ERROR` | 500 | 서버 내부 오류가 발생했습니다. |\n| `DUPLICATED_EMAIL` | 409 | 이미 가입된 이메일입니다. |\n| `DUPLICATED_NICKNAME` | 409 | 이미 사용 중인 닉네임입니다. |\n| `INVALID_VERIFICATION_CODE` | 400 | 인증번호가 올바르지 않거나 만료되었습니다. |\n| `TERMS_REQUIRED` | 400 | 필수 약관에 동의해야 합니다. |\n| `INVALID_CREDENTIALS` | 401 | 이메일 또는 비밀번호가 올바르지 않습니다. |\n| `INVALID_PASSWORD` | 400 | 현재 비밀번호가 올바르지 않습니다. |\n| `ACCOUNT_LINK_REQUIRED` | 409 | 다른 로그인 수단으로 가입된 계정입니다. 계정 연동이 필요합니다. |\n| `ACCOUNT_SUSPENDED` | 403 | 정지된 계정입니다. |\n| `LAST_IDENTITY` | 409 | 마지막 로그인 수단은 해제할 수 없습니다. |\n| `HAS_PENDING_SETTLEMENT` | 409 | 정산되지 않은 잔액이 있어 탈퇴할 수 없습니다. |\n| `SELF_ACTION` | 400 | 본인에게는 할 수 없는 요청입니다. |\n| `NOT_CREATOR` | 403 | 창작자 등록이 필요합니다. |\n| `FILE_TOO_LARGE` | 413 | 파일 용량이 너무 큽니다. |\n| `UNSUPPORTED_FILE_TYPE` | 415 | 지원하지 않는 파일 형식입니다. |\n| `CONTENT_BLOCKED` | 422 | 허용되지 않는 콘텐츠입니다. |\n| `INSUFFICIENT_CREDIT` | 402 | 크레딧이 부족합니다. |\n| `GENERATION_QUEUE_FULL` | 429 | 생성 대기열이 가득 찼습니다. 잠시 후 다시 시도해주세요. |\n| `GENERATION_LIMIT_EXCEEDED` | 429 | 일일 생성 한도를 초과했습니다. |\n| `CHARACTER_NOT_CONFIRMED` | 409 | 기준 캐릭터가 확정되지 않았습니다. |\n| `CHARACTER_IN_USE` | 409 | 사용 중인 캐릭터는 삭제할 수 없습니다. |\n| `JOB_NOT_CANCELABLE` | 409 | 취소할 수 없는 작업 상태입니다. |\n| `SET_PUBLISHED` | 409 | 공개 또는 판매 중인 세트는 삭제할 수 없습니다. |\n| `ALREADY_PUBLISHED` | 409 | 이미 공유된 세트입니다. |\n| `ALREADY_PURCHASED` | 409 | 이미 구매한 상품입니다. |\n| `NOT_PURCHASED` | 403 | 구매한 상품이 아닙니다. |\n| `PRODUCT_UNAVAILABLE` | 409 | 판매 중이 아닌 상품입니다. |\n| `PRICE_OUT_OF_RANGE` | 400 | 허용된 가격 범위를 벗어났습니다. |\n| `AMOUNT_MISMATCH` | 400 | 결제 금액이 주문 금액과 일치하지 않습니다. |\n| `ORDER_NOT_PENDING` | 409 | 결제 대기 상태의 주문이 아닙니다. |\n| `PAYMENT_FAILED` | 402 | 결제에 실패하였습니다. |\n| `INVALID_SIGNATURE` | 401 | 웹훅 서명이 올바르지 않습니다. |\n| `NOT_REFUNDABLE` | 409 | 환불할 수 없는 주문입니다. |\n| `INSUFFICIENT_POINT` | 402 | 활동 포인트가 부족합니다. |\n| `MONTHLY_CAP_EXCEEDED` | 409 | 월간 한도를 초과했습니다. |\n| `BELOW_MINIMUM` | 400 | 최소 요청 단위보다 작습니다. |\n| `INSUFFICIENT_BALANCE` | 409 | 잔액이 부족합니다. |\n| `DUPLICATED_REPORT` | 409 | 이미 신고한 대상입니다. |\n| `LEASE_EXPIRED` | 409 | 작업 임대가 만료되었거나 다른 워커에 배정되었습니다. |"
+    "description": "# EmoMix API 컨벤션\n\n## 기본\n- Base URL: `/api/v1`, 모든 본문은 JSON(UTF-8). 파일은 API 서버를 거치지 않고 presigned URL로 스토리지에 직접 PUT 한다(서버리스 요청 본문 한도 때문).\n- 필드명 camelCase, 시간은 ISO-8601 UTC, ID는 문자열(UUID), 금액은 원(KRW) 정수.\n- 목록은 `page`(0부터)·`size`(기본 20, 최대 50) 쿼리, 응답은 `data.items[] + page,size,totalElements,totalPages`.\n\n## 공통 응답 포맷\n항상 `{ success, message, data, errorCode }`.\n- 성공: `success: true`, `data`에 값, `errorCode: null`\n- 실패: `success: false`, `data: null`, `errorCode`에 아래 문자열 코드, `message`는 사용자에게 보여줄 수 있는 한글 문장\n- 검증 실패의 필드별 상세는 아직 정하지 않음(우선 message 한 줄).\n\n## 인증 (쿠키 기반)\n| 쿠키 | 속성 | 수명 | 용도 |\n| --- | --- | --- | --- |\n| `accessToken` | HttpOnly, Secure, SameSite=Lax, Path=/ | 15분 | JWT. 모든 인증 API |\n| `refreshToken` | HttpOnly, Secure, SameSite=Lax, Path=/api/v1/auth | 14일 | 재발급 전용. 서버에 해시 저장, 사용 시마다 회전, 재사용 감지 시 전체 폐기 |\n| `csrfToken` | Secure, SameSite=Lax (JS 읽기 가능) | 세션 | `GET /auth/csrf`로 발급 |\n| `signupTicket` | HttpOnly, Secure, 10분 | 10분 | Discord 최초 로그인 후 가입 완료 전용 |\n\n- 상태를 바꾸는 요청(POST/PUT/PATCH/DELETE)은 `X-CSRF-Token` 헤더에 csrfToken 쿠키 값을 넣는다. 서버는 Origin 검증도 함께 한다.\n- 프론트와 API는 같은 사이트(예: app.example.com / api.example.com)에 둔다.\n- 토큰은 응답 body에 절대 싣지 않는다.\n- 소셜 로그인은 Discord Authorization Code 리다이렉트 방식. 이미 이메일로 가입된 이메일로 Discord를 시도하면 계정을 새로 만들지 않고 `ACCOUNT_LINK_REQUIRED`.\n\n## 멱등성\n돈·크레딧·생성이 걸린 POST는 `Idempotency-Key`(UUID) 헤더 필수: 생성 작업, 주문, 결제 승인, 후원, 포인트 교환.\n\n## 두 종류의 포인트와 판매 장부\n- **크레딧(credit)**: AI 생성에 쓰는 이용권. 구매·체험·운영자 지급·활동 포인트 교환으로 획득. 요청 시 예약 → 성공 시 확정 → 실패 시 반환.\n- **활동 포인트(activity point)**: 커뮤니티 활동·거래로 획득. 현금화 불가. 월간 획득 한도와 월간 크레딧 교환 한도가 있음.\n- **판매자 매출**: 두 포인트와 섞지 않고 별도 장부(`/seller/ledger`)로 관리. 시제품 단계의 정산은 모의 처리.\n- 후원(donation)은 혜택 없는 응원금이고 구매(order)와 흐름이 다르다. 후원은 환불하지 않는다.\n\n## 에러 코드\n공통: 400 `VALIDATION_ERROR`, 401 `UNAUTHORIZED`, 403 `FORBIDDEN`/`CSRF_INVALID`, 404 `NOT_FOUND`, 409 `DUPLICATED`/`IDEMPOTENCY_CONFLICT`, 429 `RATE_LIMITED`, 500 `SERVER_ERROR`. 도메인 세부 코드는 공통 코드로 표현이 안 될 때만 의미가 분명한 이름으로 추가했다(전체는 아래).\n\n| Code | HTTP | 메시지 |\n| --- | --- | --- |\n| `VALIDATION_ERROR` | 400 | 요청 값이 올바르지 않습니다. |\n| `UNAUTHORIZED` | 401 | 로그인이 필요합니다. |\n| `CSRF_INVALID` | 403 | CSRF 검증에 실패했습니다. |\n| `FORBIDDEN` | 403 | 접근 권한이 없습니다. |\n| `NOT_FOUND` | 404 | 존재하지 않는 리소스입니다. |\n| `DUPLICATED` | 409 | 이미 존재합니다. |\n| `RATE_LIMITED` | 429 | 요청이 너무 많습니다. 잠시 후 다시 시도해주세요. |\n| `IDEMPOTENCY_CONFLICT` | 409 | 같은 Idempotency-Key로 다른 요청이 처리 중이거나 완료되었습니다. |\n| `SERVER_ERROR` | 500 | 서버 내부 오류가 발생했습니다. |\n| `DUPLICATED_EMAIL` | 409 | 이미 가입된 이메일입니다. |\n| `DUPLICATED_NICKNAME` | 409 | 이미 사용 중인 닉네임입니다. |\n| `INVALID_VERIFICATION_CODE` | 400 | 인증번호가 올바르지 않거나 만료되었습니다. |\n| `TERMS_REQUIRED` | 400 | 필수 약관에 동의해야 합니다. |\n| `INVALID_CREDENTIALS` | 401 | 이메일 또는 비밀번호가 올바르지 않습니다. |\n| `INVALID_PASSWORD` | 400 | 현재 비밀번호가 올바르지 않습니다. |\n| `ACCOUNT_LINK_REQUIRED` | 409 | 다른 로그인 수단으로 가입된 계정입니다. 계정 연동이 필요합니다. |\n| `ACCOUNT_SUSPENDED` | 403 | 정지된 계정입니다. |\n| `LAST_IDENTITY` | 409 | 마지막 로그인 수단은 해제할 수 없습니다. |\n| `HAS_PENDING_SETTLEMENT` | 409 | 정산되지 않은 잔액이 있어 탈퇴할 수 없습니다. |\n| `SELF_ACTION` | 400 | 본인에게는 할 수 없는 요청입니다. |\n| `NOT_CREATOR` | 403 | 창작자 등록이 필요합니다. |\n| `FILE_TOO_LARGE` | 413 | 파일 용량이 너무 큽니다. |\n| `UNSUPPORTED_FILE_TYPE` | 415 | 지원하지 않는 파일 형식입니다. |\n| `CONTENT_BLOCKED` | 422 | 허용되지 않는 콘텐츠입니다. |\n| `INSUFFICIENT_CREDIT` | 402 | 크레딧이 부족합니다. |\n| `GENERATION_QUEUE_FULL` | 429 | 생성 대기열이 가득 찼습니다. 잠시 후 다시 시도해주세요. |\n| `GENERATION_LIMIT_EXCEEDED` | 429 | 일일 생성 한도를 초과했습니다. |\n| `CHARACTER_NOT_CONFIRMED` | 409 | 기준 캐릭터가 확정되지 않았습니다. |\n| `CHARACTER_IN_USE` | 409 | 사용 중인 캐릭터는 삭제할 수 없습니다. |\n| `JOB_NOT_CANCELABLE` | 409 | 취소할 수 없는 작업 상태입니다. |\n| `SET_PUBLISHED` | 409 | 공개 또는 판매 중인 세트는 삭제할 수 없습니다. |\n| `ALREADY_PUBLISHED` | 409 | 이미 공유된 세트입니다. |\n| `ALREADY_PURCHASED` | 409 | 이미 구매한 상품입니다. |\n| `NOT_PURCHASED` | 403 | 구매한 상품이 아닙니다. |\n| `PRODUCT_UNAVAILABLE` | 409 | 판매 중이 아닌 상품입니다. |\n| `PRICE_OUT_OF_RANGE` | 400 | 허용된 가격 범위를 벗어났습니다. |\n| `AMOUNT_MISMATCH` | 400 | 결제 금액이 주문 금액과 일치하지 않습니다. |\n| `ORDER_NOT_PENDING` | 409 | 결제 대기 상태의 주문이 아닙니다. |\n| `PAYMENT_FAILED` | 402 | 결제에 실패하였습니다. |\n| `INVALID_SIGNATURE` | 401 | 웹훅 서명이 올바르지 않습니다. |\n| `NOT_REFUNDABLE` | 409 | 환불할 수 없는 주문입니다. |\n| `INSUFFICIENT_POINT` | 402 | 활동 포인트가 부족합니다. |\n| `MONTHLY_CAP_EXCEEDED` | 409 | 월간 한도를 초과했습니다. |\n| `BELOW_MINIMUM` | 400 | 최소 요청 단위보다 작습니다. |\n| `INSUFFICIENT_BALANCE` | 409 | 잔액이 부족합니다. |\n| `DUPLICATED_REPORT` | 409 | 이미 신고한 대상입니다. |\n| `ALREADY_SUBSCRIBED` | 409 | 이미 구독 중입니다. |\n| `NOT_SUBSCRIBED` | 404 | 구독 중이 아닙니다. |\n| `LEASE_EXPIRED` | 409 | 작업 임대가 만료되었거나 다른 워커에 배정되었습니다. |"
   },
   "servers": [
     {
@@ -74,6 +74,9 @@
     },
     {
       "name": "Worker"
+    },
+    {
+      "name": "Subscription"
     }
   ],
   "paths": {
@@ -17823,7 +17826,8 @@
                           "enum": [
                             "PRODUCT",
                             "CREDIT_PACKAGE",
-                            "DONATION"
+                            "DONATION",
+                            "SUBSCRIPTION"
                           ],
                           "description": "주문 종류"
                         },
@@ -18033,7 +18037,8 @@
               "enum": [
                 "PRODUCT",
                 "CREDIT_PACKAGE",
-                "DONATION"
+                "DONATION",
+                "SUBSCRIPTION"
               ]
             }
           },
@@ -18096,7 +18101,8 @@
                                 "enum": [
                                   "PRODUCT",
                                   "CREDIT_PACKAGE",
-                                  "DONATION"
+                                  "DONATION",
+                                  "SUBSCRIPTION"
                                 ],
                                 "description": "주문 종류"
                               },
@@ -18298,7 +18304,8 @@
                           "enum": [
                             "PRODUCT",
                             "CREDIT_PACKAGE",
-                            "DONATION"
+                            "DONATION",
+                            "SUBSCRIPTION"
                           ],
                           "description": "주문 종류"
                         },
@@ -18644,7 +18651,7 @@
             }
           },
           "409": {
-            "description": "NOT_REFUNDABLE: 환불 불가 (이미지·템플릿: 결제 후 7일 초과 또는 다운로드/조회 이력 있음, 크레딧: 일부라도 사용함, 후원: 환불 없음)",
+            "description": "NOT_REFUNDABLE: 환불 불가 (이미지·템플릿: 결제 후 7일 초과 또는 다운로드/조회 이력 있음, 크레딧: 일부라도 사용함, 후원·구독 결제: 환불 없음 - 구독은 해지로 다음 결제만 막는다)",
             "content": {
               "application/json": {
                 "schema": {
@@ -18652,7 +18659,7 @@
                 },
                 "examples": {
                   "NOT_REFUNDABLE": {
-                    "summary": "환불 불가 (이미지·템플릿: 결제 후 7일 초과 또는 다운로드/조회 이력 있음, 크레딧: 일부라도 사용함, 후원: 환불 없음)",
+                    "summary": "환불 불가 (이미지·템플릿: 결제 후 7일 초과 또는 다운로드/조회 이력 있음, 크레딧: 일부라도 사용함, 후원·구독 결제: 환불 없음 - 구독은 해지로 다음 결제만 막는다)",
                     "value": {
                       "success": false,
                       "message": "환불할 수 없는 주문입니다.",
@@ -19108,7 +19115,7 @@
         ],
         "summary": "내 지갑 조회",
         "operationId": "op095",
-        "description": "화면에는 두 값을 함께 보여주되 서버에서는 별도 원장으로 관리한다.",
+        "description": "화면에는 두 값을 함께 보여주되 서버에서는 별도 원장으로 관리한다. credit.balance 는 구독 크레딧을 포함한 총 사용 가능 수량이고, 생성 시에는 소멸 시점이 빠른 구독 크레딧부터 사용한다.",
         "security": [
           {
             "cookieAuth": []
@@ -19142,17 +19149,29 @@
                           "properties": {
                             "balance": {
                               "type": "integer",
-                              "description": "사용 가능 잔액"
+                              "description": "사용 가능 잔액(구독 크레딧 포함)"
                             },
                             "reserved": {
                               "type": "integer",
                               "description": "진행 중인 작업에 예약된 수량"
+                            },
+                            "subscriptionBalance": {
+                              "type": "integer",
+                              "description": "balance 중 구독으로 받은 크레딧(이월 없이 구독 기간이 끝나면 소멸)"
+                            },
+                            "subscriptionExpiresAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "구독 크레딧 소멸 일시 (구독 중이 아니면 null)",
+                              "nullable": true
                             }
                           },
                           "description": "생성 크레딧",
                           "required": [
                             "balance",
-                            "reserved"
+                            "reserved",
+                            "subscriptionBalance",
+                            "subscriptionExpiresAt"
                           ]
                         },
                         "activityPoint": {
@@ -19211,8 +19230,10 @@
                   "message": "요청이 성공했습니다.",
                   "data": {
                     "credit": {
-                      "balance": 20,
-                      "reserved": 8
+                      "balance": 90,
+                      "reserved": 8,
+                      "subscriptionBalance": 70,
+                      "subscriptionExpiresAt": "2026-12-20T00:00:00Z"
                     },
                     "activityPoint": {
                       "balance": 300,
@@ -19296,7 +19317,9 @@
                 "CONSUME",
                 "RELEASE",
                 "REFUND",
-                "ADMIN_GRANT"
+                "ADMIN_GRANT",
+                "SUBSCRIPTION_GRANT",
+                "SUBSCRIPTION_EXPIRE"
               ]
             }
           },
@@ -20277,7 +20300,8 @@
                           "enum": [
                             "PRODUCT",
                             "CREDIT_PACKAGE",
-                            "DONATION"
+                            "DONATION",
+                            "SUBSCRIPTION"
                           ],
                           "description": "주문 종류"
                         },
@@ -21759,7 +21783,7 @@
                         },
                         "feeRate": {
                           "type": "number",
-                          "description": "판매 수수료율"
+                          "description": "판매 수수료율(판매자의 구독 요금제에 따라 다름: 무료 0.2 / 스탠다드 0.15 / 프로 0.1)"
                         },
                         "minSettlementAmount": {
                           "type": "integer",
@@ -27215,6 +27239,2009 @@
           }
         }
       }
+    },
+    "/subscription-plans": {
+      "get": {
+        "tags": [
+          "Subscription"
+        ],
+        "summary": "구독 요금제 조회",
+        "operationId": "op136",
+        "description": "무료 요금제는 가입 체험 크레딧(20)만 주고 월 지급은 없다. 구독 크레딧은 이월하지 않는다: 구독 기간이 끝나면(해지·갱신 시점) 남은 구독 크레딧은 소멸하고, 갱신에 성공하면 월 크레딧이 새로 지급된다. 요금제 값은 서버 설정이며 응답이 기준이다.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "요청이 성공했습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "message",
+                    "data",
+                    "errorCode"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "enum": [
+                                  "FREE",
+                                  "STANDARD",
+                                  "PRO"
+                                ],
+                                "description": "요금제 코드"
+                              },
+                              "name": {
+                                "type": "string",
+                                "description": "이름"
+                              },
+                              "price": {
+                                "type": "integer",
+                                "description": "월 가격(원)"
+                              },
+                              "monthlyCredits": {
+                                "type": "integer",
+                                "description": "매달 지급되는 크레딧(이월 없음)"
+                              },
+                              "dailyGenerationLimit": {
+                                "type": "integer",
+                                "description": "일일 생성 한도(장)"
+                              },
+                              "priorityQueue": {
+                                "type": "boolean",
+                                "description": "생성 대기열 우선 처리"
+                              },
+                              "sellerFeeRate": {
+                                "type": "number",
+                                "description": "마켓 판매 수수료율"
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "name",
+                              "price",
+                              "monthlyCredits",
+                              "dailyGenerationLimit",
+                              "priorityQueue",
+                              "sellerFeeRate"
+                            ]
+                          },
+                          "description": "요금제 목록(FREE 포함)"
+                        }
+                      },
+                      "required": [
+                        "items"
+                      ]
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "message": "요청이 성공했습니다.",
+                  "data": {
+                    "items": [
+                      {
+                        "code": "STANDARD",
+                        "name": "스탠다드",
+                        "price": 4900,
+                        "monthlyCredits": 70,
+                        "dailyGenerationLimit": 100,
+                        "priorityQueue": true,
+                        "sellerFeeRate": 0.15
+                      }
+                    ]
+                  },
+                  "errorCode": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/subscriptions/me": {
+      "get": {
+        "tags": [
+          "Subscription"
+        ],
+        "summary": "내 구독 조회",
+        "operationId": "op137",
+        "description": "결제수단 등록 화면(토스 SDK requestBillingAuth)을 열 때 customerKey 를 이 응답에서 가져와 쓴다. PAST_DUE 중에는 혜택이 유지된다(유예).",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "요청이 성공했습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "message",
+                    "data",
+                    "errorCode"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "customerKey": {
+                          "type": "string",
+                          "description": "토스 결제수단 등록에 쓸 사용자 고유 키(변하지 않음)"
+                        },
+                        "plan": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "FREE",
+                                "STANDARD",
+                                "PRO"
+                              ],
+                              "description": "요금제 코드"
+                            },
+                            "name": {
+                              "type": "string",
+                              "description": "이름"
+                            },
+                            "price": {
+                              "type": "integer",
+                              "description": "월 가격(원)"
+                            },
+                            "monthlyCredits": {
+                              "type": "integer",
+                              "description": "매달 지급되는 크레딧(이월 없음)"
+                            },
+                            "dailyGenerationLimit": {
+                              "type": "integer",
+                              "description": "일일 생성 한도(장)"
+                            },
+                            "priorityQueue": {
+                              "type": "boolean",
+                              "description": "생성 대기열 우선 처리"
+                            },
+                            "sellerFeeRate": {
+                              "type": "number",
+                              "description": "마켓 판매 수수료율"
+                            }
+                          },
+                          "description": "지금 적용되는 요금제(구독이 없으면 FREE)",
+                          "nullable": true,
+                          "required": [
+                            "code",
+                            "name",
+                            "price",
+                            "monthlyCredits",
+                            "dailyGenerationLimit",
+                            "priorityQueue",
+                            "sellerFeeRate"
+                          ]
+                        },
+                        "subscription": {
+                          "type": "object",
+                          "properties": {
+                            "planCode": {
+                              "type": "string",
+                              "enum": [
+                                "STANDARD",
+                                "PRO"
+                              ],
+                              "description": "현재 요금제"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "ACTIVE",
+                                "PAST_DUE",
+                                "CANCELED"
+                              ],
+                              "description": "ACTIVE 구독 중 / PAST_DUE 결제 실패 유예 중(혜택 유지, 재시도 중) / CANCELED 종료"
+                            },
+                            "currentPeriodStart": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "현재 구독 기간 시작"
+                            },
+                            "currentPeriodEnd": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "현재 구독 기간 끝(구독 크레딧 소멸 시점)"
+                            },
+                            "nextBillingAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "다음 결제 예정 일시 (해지 예약·종료면 null)",
+                              "nullable": true
+                            },
+                            "cancelAtPeriodEnd": {
+                              "type": "boolean",
+                              "description": "기간 끝에 해지 예정인지"
+                            },
+                            "scheduledPlanCode": {
+                              "type": "string",
+                              "enum": [
+                                "STANDARD",
+                                "PRO"
+                              ],
+                              "description": "다음 결제일부터 적용될 요금제 (변경 예약이 없으면 null)",
+                              "nullable": true
+                            },
+                            "failedAttempts": {
+                              "type": "integer",
+                              "description": "이번 결제일의 결제 실패 횟수"
+                            },
+                            "card": {
+                              "type": "object",
+                              "properties": {
+                                "company": {
+                                  "type": "string",
+                                  "description": "카드사"
+                                },
+                                "numberMasked": {
+                                  "type": "string",
+                                  "description": "마스킹된 카드번호"
+                                }
+                              },
+                              "description": "등록된 결제 카드",
+                              "required": [
+                                "company",
+                                "numberMasked"
+                              ]
+                            }
+                          },
+                          "description": "구독 정보 (구독한 적이 없거나 종료되어 FREE 면 null)",
+                          "nullable": true,
+                          "required": [
+                            "planCode",
+                            "status",
+                            "currentPeriodStart",
+                            "currentPeriodEnd",
+                            "nextBillingAt",
+                            "cancelAtPeriodEnd",
+                            "scheduledPlanCode",
+                            "failedAttempts",
+                            "card"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "customerKey",
+                        "plan",
+                        "subscription"
+                      ]
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "message": "요청이 성공했습니다.",
+                  "data": {
+                    "customerKey": "cus-9b1c...",
+                    "plan": {
+                      "code": "STANDARD",
+                      "name": "스탠다드",
+                      "price": 4900,
+                      "monthlyCredits": 70,
+                      "dailyGenerationLimit": 100,
+                      "priorityQueue": true,
+                      "sellerFeeRate": 0.15
+                    },
+                    "subscription": {
+                      "planCode": "STANDARD",
+                      "status": "ACTIVE",
+                      "currentPeriodStart": "2026-11-17T12:00:00Z",
+                      "currentPeriodEnd": "2026-11-17T12:00:00Z",
+                      "nextBillingAt": null,
+                      "cancelAtPeriodEnd": false,
+                      "scheduledPlanCode": null,
+                      "failedAttempts": 0,
+                      "card": {
+                        "company": "삼성",
+                        "numberMasked": "1234-56**-****-7890"
+                      }
+                    }
+                  },
+                  "errorCode": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED: accessToken 없음/만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "accessToken 없음/만료",
+                    "value": {
+                      "success": false,
+                      "message": "로그인이 필요합니다.",
+                      "data": null,
+                      "errorCode": "UNAUTHORIZED"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Subscription"
+        ],
+        "summary": "구독 요금제 변경 예약",
+        "operationId": "op139",
+        "description": "변경은 다음 결제일부터 적용된다(업/다운그레이드 모두). 이번 기간의 혜택과 이미 낸 금액은 그대로 유지되고 차액 정산은 없다. 같은 요금제로 되돌리면 예약이 취소된다.",
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "planCode": {
+                    "type": "string",
+                    "enum": [
+                      "STANDARD",
+                      "PRO"
+                    ],
+                    "description": "다음 결제일부터 적용할 요금제"
+                  }
+                },
+                "required": [
+                  "planCode"
+                ]
+              },
+              "example": {
+                "planCode": "PRO"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "요금제 변경이 예약되었습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "message",
+                    "data",
+                    "errorCode"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "planCode": {
+                          "type": "string",
+                          "enum": [
+                            "STANDARD",
+                            "PRO"
+                          ],
+                          "description": "현재 요금제"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ACTIVE",
+                            "PAST_DUE",
+                            "CANCELED"
+                          ],
+                          "description": "ACTIVE 구독 중 / PAST_DUE 결제 실패 유예 중(혜택 유지, 재시도 중) / CANCELED 종료"
+                        },
+                        "currentPeriodStart": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "현재 구독 기간 시작"
+                        },
+                        "currentPeriodEnd": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "현재 구독 기간 끝(구독 크레딧 소멸 시점)"
+                        },
+                        "nextBillingAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "다음 결제 예정 일시 (해지 예약·종료면 null)",
+                          "nullable": true
+                        },
+                        "cancelAtPeriodEnd": {
+                          "type": "boolean",
+                          "description": "기간 끝에 해지 예정인지"
+                        },
+                        "scheduledPlanCode": {
+                          "type": "string",
+                          "enum": [
+                            "STANDARD",
+                            "PRO"
+                          ],
+                          "description": "다음 결제일부터 적용될 요금제 (변경 예약이 없으면 null)",
+                          "nullable": true
+                        },
+                        "failedAttempts": {
+                          "type": "integer",
+                          "description": "이번 결제일의 결제 실패 횟수"
+                        },
+                        "card": {
+                          "type": "object",
+                          "properties": {
+                            "company": {
+                              "type": "string",
+                              "description": "카드사"
+                            },
+                            "numberMasked": {
+                              "type": "string",
+                              "description": "마스킹된 카드번호"
+                            }
+                          },
+                          "description": "등록된 결제 카드",
+                          "required": [
+                            "company",
+                            "numberMasked"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "planCode",
+                        "status",
+                        "currentPeriodStart",
+                        "currentPeriodEnd",
+                        "nextBillingAt",
+                        "cancelAtPeriodEnd",
+                        "scheduledPlanCode",
+                        "failedAttempts",
+                        "card"
+                      ]
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "message": "요금제 변경이 예약되었습니다.",
+                  "data": {
+                    "planCode": "STANDARD",
+                    "status": "ACTIVE",
+                    "currentPeriodStart": "2026-11-17T12:00:00Z",
+                    "currentPeriodEnd": "2026-11-17T12:00:00Z",
+                    "nextBillingAt": null,
+                    "cancelAtPeriodEnd": false,
+                    "scheduledPlanCode": null,
+                    "failedAttempts": 0,
+                    "card": {
+                      "company": "삼성",
+                      "numberMasked": "1234-56**-****-7890"
+                    }
+                  },
+                  "errorCode": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR: 현재 요금제와 같음 / 종료된 구독",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "VALIDATION_ERROR": {
+                    "summary": "현재 요금제와 같음 / 종료된 구독",
+                    "value": {
+                      "success": false,
+                      "message": "요청 값이 올바르지 않습니다.",
+                      "data": null,
+                      "errorCode": "VALIDATION_ERROR"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED: accessToken 없음/만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "accessToken 없음/만료",
+                    "value": {
+                      "success": false,
+                      "message": "로그인이 필요합니다.",
+                      "data": null,
+                      "errorCode": "UNAUTHORIZED"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF_INVALID: X-CSRF-Token 헤더 누락 또는 쿠키와 불일치",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CSRF_INVALID": {
+                    "summary": "X-CSRF-Token 헤더 누락 또는 쿠키와 불일치",
+                    "value": {
+                      "success": false,
+                      "message": "CSRF 검증에 실패했습니다.",
+                      "data": null,
+                      "errorCode": "CSRF_INVALID"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_SUBSCRIBED: 구독 중이 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "NOT_SUBSCRIBED": {
+                    "summary": "구독 중이 아님",
+                    "value": {
+                      "success": false,
+                      "message": "구독 중이 아닙니다.",
+                      "data": null,
+                      "errorCode": "NOT_SUBSCRIBED"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Subscription"
+        ],
+        "summary": "구독 해지",
+        "operationId": "op140",
+        "description": "해지하면 자동결제가 멈추고 구독 기간이 끝날 때까지 혜택(남은 구독 크레딧 포함)은 유지된다. 기간이 끝나면 status 가 CANCELED 가 되고 남은 구독 크레딧은 소멸하며 FREE 요금제로 돌아간다. 결제한 금액은 환불하지 않는다. 이미 해지 예약 상태면 그대로 성공한다.",
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "구독 해지가 예약되었습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "message",
+                    "data",
+                    "errorCode"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "planCode": {
+                          "type": "string",
+                          "enum": [
+                            "STANDARD",
+                            "PRO"
+                          ],
+                          "description": "현재 요금제"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ACTIVE",
+                            "PAST_DUE",
+                            "CANCELED"
+                          ],
+                          "description": "ACTIVE 구독 중 / PAST_DUE 결제 실패 유예 중(혜택 유지, 재시도 중) / CANCELED 종료"
+                        },
+                        "currentPeriodStart": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "현재 구독 기간 시작"
+                        },
+                        "currentPeriodEnd": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "현재 구독 기간 끝(구독 크레딧 소멸 시점)"
+                        },
+                        "nextBillingAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "다음 결제 예정 일시 (해지 예약·종료면 null)",
+                          "nullable": true
+                        },
+                        "cancelAtPeriodEnd": {
+                          "type": "boolean",
+                          "description": "기간 끝에 해지 예정인지"
+                        },
+                        "scheduledPlanCode": {
+                          "type": "string",
+                          "enum": [
+                            "STANDARD",
+                            "PRO"
+                          ],
+                          "description": "다음 결제일부터 적용될 요금제 (변경 예약이 없으면 null)",
+                          "nullable": true
+                        },
+                        "failedAttempts": {
+                          "type": "integer",
+                          "description": "이번 결제일의 결제 실패 횟수"
+                        },
+                        "card": {
+                          "type": "object",
+                          "properties": {
+                            "company": {
+                              "type": "string",
+                              "description": "카드사"
+                            },
+                            "numberMasked": {
+                              "type": "string",
+                              "description": "마스킹된 카드번호"
+                            }
+                          },
+                          "description": "등록된 결제 카드",
+                          "required": [
+                            "company",
+                            "numberMasked"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "planCode",
+                        "status",
+                        "currentPeriodStart",
+                        "currentPeriodEnd",
+                        "nextBillingAt",
+                        "cancelAtPeriodEnd",
+                        "scheduledPlanCode",
+                        "failedAttempts",
+                        "card"
+                      ]
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "message": "구독 해지가 예약되었습니다.",
+                  "data": {
+                    "planCode": "STANDARD",
+                    "status": "ACTIVE",
+                    "currentPeriodStart": "2026-11-17T12:00:00Z",
+                    "currentPeriodEnd": "2026-11-17T12:00:00Z",
+                    "nextBillingAt": null,
+                    "cancelAtPeriodEnd": false,
+                    "scheduledPlanCode": null,
+                    "failedAttempts": 0,
+                    "card": {
+                      "company": "삼성",
+                      "numberMasked": "1234-56**-****-7890"
+                    }
+                  },
+                  "errorCode": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED: accessToken 없음/만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "accessToken 없음/만료",
+                    "value": {
+                      "success": false,
+                      "message": "로그인이 필요합니다.",
+                      "data": null,
+                      "errorCode": "UNAUTHORIZED"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF_INVALID: X-CSRF-Token 헤더 누락 또는 쿠키와 불일치",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CSRF_INVALID": {
+                    "summary": "X-CSRF-Token 헤더 누락 또는 쿠키와 불일치",
+                    "value": {
+                      "success": false,
+                      "message": "CSRF 검증에 실패했습니다.",
+                      "data": null,
+                      "errorCode": "CSRF_INVALID"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_SUBSCRIBED: 구독 중이 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "NOT_SUBSCRIBED": {
+                    "summary": "구독 중이 아님",
+                    "value": {
+                      "success": false,
+                      "message": "구독 중이 아닙니다.",
+                      "data": null,
+                      "errorCode": "NOT_SUBSCRIBED"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/subscriptions": {
+      "post": {
+        "tags": [
+          "Subscription"
+        ],
+        "summary": "구독 시작",
+        "operationId": "op138",
+        "description": "서버가 authKey 로 billingKey 를 발급받아 저장하고(카드번호는 저장하지 않는다) 첫 달을 즉시 청구한다. 성공하면 구독 기간(오늘 ~ 한 달 뒤)이 시작되고 월 크레딧이 지급된다. 결제 내역은 구독 결제 내역과 주문(type=SUBSCRIPTION)에 남는다.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "중복 처리 방지용 UUID. 같은 키로 재전송하면 최초 결과를 돌려줌."
+          }
+        ],
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "planCode": {
+                    "type": "string",
+                    "enum": [
+                      "STANDARD",
+                      "PRO"
+                    ],
+                    "description": "가입할 요금제"
+                  },
+                  "authKey": {
+                    "type": "string",
+                    "description": "토스 결제수단 등록(requestBillingAuth) 성공 후 리다이렉트로 받은 authKey"
+                  },
+                  "customerKey": {
+                    "type": "string",
+                    "description": "등록에 사용한 customerKey (GET /subscriptions/me 의 값과 같아야 함)"
+                  }
+                },
+                "required": [
+                  "planCode",
+                  "authKey",
+                  "customerKey"
+                ]
+              },
+              "example": {
+                "planCode": "STANDARD",
+                "authKey": "string",
+                "customerKey": "string"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "구독이 시작되었습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "message",
+                    "data",
+                    "errorCode"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "planCode": {
+                          "type": "string",
+                          "enum": [
+                            "STANDARD",
+                            "PRO"
+                          ],
+                          "description": "현재 요금제"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ACTIVE",
+                            "PAST_DUE",
+                            "CANCELED"
+                          ],
+                          "description": "ACTIVE 구독 중 / PAST_DUE 결제 실패 유예 중(혜택 유지, 재시도 중) / CANCELED 종료"
+                        },
+                        "currentPeriodStart": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "현재 구독 기간 시작"
+                        },
+                        "currentPeriodEnd": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "현재 구독 기간 끝(구독 크레딧 소멸 시점)"
+                        },
+                        "nextBillingAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "다음 결제 예정 일시 (해지 예약·종료면 null)",
+                          "nullable": true
+                        },
+                        "cancelAtPeriodEnd": {
+                          "type": "boolean",
+                          "description": "기간 끝에 해지 예정인지"
+                        },
+                        "scheduledPlanCode": {
+                          "type": "string",
+                          "enum": [
+                            "STANDARD",
+                            "PRO"
+                          ],
+                          "description": "다음 결제일부터 적용될 요금제 (변경 예약이 없으면 null)",
+                          "nullable": true
+                        },
+                        "failedAttempts": {
+                          "type": "integer",
+                          "description": "이번 결제일의 결제 실패 횟수"
+                        },
+                        "card": {
+                          "type": "object",
+                          "properties": {
+                            "company": {
+                              "type": "string",
+                              "description": "카드사"
+                            },
+                            "numberMasked": {
+                              "type": "string",
+                              "description": "마스킹된 카드번호"
+                            }
+                          },
+                          "description": "등록된 결제 카드",
+                          "required": [
+                            "company",
+                            "numberMasked"
+                          ]
+                        },
+                        "grantedCredits": {
+                          "type": "integer",
+                          "description": "첫 결제로 지급된 월 크레딧"
+                        }
+                      },
+                      "required": [
+                        "planCode",
+                        "status",
+                        "currentPeriodStart",
+                        "currentPeriodEnd",
+                        "nextBillingAt",
+                        "cancelAtPeriodEnd",
+                        "scheduledPlanCode",
+                        "failedAttempts",
+                        "card",
+                        "grantedCredits"
+                      ]
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "message": "구독이 시작되었습니다.",
+                  "data": {
+                    "planCode": "STANDARD",
+                    "status": "ACTIVE",
+                    "currentPeriodStart": "2026-11-17T12:00:00Z",
+                    "currentPeriodEnd": "2026-11-17T12:00:00Z",
+                    "nextBillingAt": null,
+                    "cancelAtPeriodEnd": false,
+                    "scheduledPlanCode": null,
+                    "failedAttempts": 0,
+                    "card": {
+                      "company": "삼성",
+                      "numberMasked": "1234-56**-****-7890"
+                    },
+                    "grantedCredits": 70
+                  },
+                  "errorCode": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR: customerKey 불일치, 없는 요금제(FREE 는 구독 대상이 아님)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "VALIDATION_ERROR": {
+                    "summary": "customerKey 불일치, 없는 요금제(FREE 는 구독 대상이 아님)",
+                    "value": {
+                      "success": false,
+                      "message": "요청 값이 올바르지 않습니다.",
+                      "data": null,
+                      "errorCode": "VALIDATION_ERROR"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED: accessToken 없음/만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "accessToken 없음/만료",
+                    "value": {
+                      "success": false,
+                      "message": "로그인이 필요합니다.",
+                      "data": null,
+                      "errorCode": "UNAUTHORIZED"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "PAYMENT_FAILED: 카드 등록(billingKey 발급) 또는 첫 달 결제에 실패 - 구독은 만들어지지 않는다",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "PAYMENT_FAILED": {
+                    "summary": "카드 등록(billingKey 발급) 또는 첫 달 결제에 실패 - 구독은 만들어지지 않는다",
+                    "value": {
+                      "success": false,
+                      "message": "결제에 실패하였습니다.",
+                      "data": null,
+                      "errorCode": "PAYMENT_FAILED"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF_INVALID: X-CSRF-Token 헤더 누락 또는 쿠키와 불일치",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CSRF_INVALID": {
+                    "summary": "X-CSRF-Token 헤더 누락 또는 쿠키와 불일치",
+                    "value": {
+                      "success": false,
+                      "message": "CSRF 검증에 실패했습니다.",
+                      "data": null,
+                      "errorCode": "CSRF_INVALID"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ALREADY_SUBSCRIBED: 이미 구독 중(ACTIVE/PAST_DUE) / IDEMPOTENCY_CONFLICT: 같은 키로 다른 요청",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "ALREADY_SUBSCRIBED": {
+                    "summary": "이미 구독 중(ACTIVE/PAST_DUE)",
+                    "value": {
+                      "success": false,
+                      "message": "이미 구독 중입니다.",
+                      "data": null,
+                      "errorCode": "ALREADY_SUBSCRIBED"
+                    }
+                  },
+                  "IDEMPOTENCY_CONFLICT": {
+                    "summary": "같은 키로 다른 요청",
+                    "value": {
+                      "success": false,
+                      "message": "같은 Idempotency-Key로 다른 요청이 처리 중이거나 완료되었습니다.",
+                      "data": null,
+                      "errorCode": "IDEMPOTENCY_CONFLICT"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/subscriptions/me/resume": {
+      "post": {
+        "tags": [
+          "Subscription"
+        ],
+        "summary": "구독 해지 취소",
+        "operationId": "op141",
+        "description": "구독 기간이 끝나기 전에만 해지 예약을 취소할 수 있다.",
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "구독이 계속됩니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "message",
+                    "data",
+                    "errorCode"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "planCode": {
+                          "type": "string",
+                          "enum": [
+                            "STANDARD",
+                            "PRO"
+                          ],
+                          "description": "현재 요금제"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ACTIVE",
+                            "PAST_DUE",
+                            "CANCELED"
+                          ],
+                          "description": "ACTIVE 구독 중 / PAST_DUE 결제 실패 유예 중(혜택 유지, 재시도 중) / CANCELED 종료"
+                        },
+                        "currentPeriodStart": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "현재 구독 기간 시작"
+                        },
+                        "currentPeriodEnd": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "현재 구독 기간 끝(구독 크레딧 소멸 시점)"
+                        },
+                        "nextBillingAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "다음 결제 예정 일시 (해지 예약·종료면 null)",
+                          "nullable": true
+                        },
+                        "cancelAtPeriodEnd": {
+                          "type": "boolean",
+                          "description": "기간 끝에 해지 예정인지"
+                        },
+                        "scheduledPlanCode": {
+                          "type": "string",
+                          "enum": [
+                            "STANDARD",
+                            "PRO"
+                          ],
+                          "description": "다음 결제일부터 적용될 요금제 (변경 예약이 없으면 null)",
+                          "nullable": true
+                        },
+                        "failedAttempts": {
+                          "type": "integer",
+                          "description": "이번 결제일의 결제 실패 횟수"
+                        },
+                        "card": {
+                          "type": "object",
+                          "properties": {
+                            "company": {
+                              "type": "string",
+                              "description": "카드사"
+                            },
+                            "numberMasked": {
+                              "type": "string",
+                              "description": "마스킹된 카드번호"
+                            }
+                          },
+                          "description": "등록된 결제 카드",
+                          "required": [
+                            "company",
+                            "numberMasked"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "planCode",
+                        "status",
+                        "currentPeriodStart",
+                        "currentPeriodEnd",
+                        "nextBillingAt",
+                        "cancelAtPeriodEnd",
+                        "scheduledPlanCode",
+                        "failedAttempts",
+                        "card"
+                      ]
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "message": "구독이 계속됩니다.",
+                  "data": {
+                    "planCode": "STANDARD",
+                    "status": "ACTIVE",
+                    "currentPeriodStart": "2026-11-17T12:00:00Z",
+                    "currentPeriodEnd": "2026-11-17T12:00:00Z",
+                    "nextBillingAt": null,
+                    "cancelAtPeriodEnd": false,
+                    "scheduledPlanCode": null,
+                    "failedAttempts": 0,
+                    "card": {
+                      "company": "삼성",
+                      "numberMasked": "1234-56**-****-7890"
+                    }
+                  },
+                  "errorCode": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR: 이미 종료되어 다시 시작해야 하는 구독(POST /subscriptions 사용)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "VALIDATION_ERROR": {
+                    "summary": "이미 종료되어 다시 시작해야 하는 구독(POST /subscriptions 사용)",
+                    "value": {
+                      "success": false,
+                      "message": "요청 값이 올바르지 않습니다.",
+                      "data": null,
+                      "errorCode": "VALIDATION_ERROR"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED: accessToken 없음/만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "accessToken 없음/만료",
+                    "value": {
+                      "success": false,
+                      "message": "로그인이 필요합니다.",
+                      "data": null,
+                      "errorCode": "UNAUTHORIZED"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF_INVALID: X-CSRF-Token 헤더 누락 또는 쿠키와 불일치",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CSRF_INVALID": {
+                    "summary": "X-CSRF-Token 헤더 누락 또는 쿠키와 불일치",
+                    "value": {
+                      "success": false,
+                      "message": "CSRF 검증에 실패했습니다.",
+                      "data": null,
+                      "errorCode": "CSRF_INVALID"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_SUBSCRIBED: 구독 중이 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "NOT_SUBSCRIBED": {
+                    "summary": "구독 중이 아님",
+                    "value": {
+                      "success": false,
+                      "message": "구독 중이 아닙니다.",
+                      "data": null,
+                      "errorCode": "NOT_SUBSCRIBED"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/subscriptions/me/payment-method": {
+      "put": {
+        "tags": [
+          "Subscription"
+        ],
+        "summary": "결제 카드 변경",
+        "operationId": "op142",
+        "description": "새 billingKey 로 교체하고 이전 billingKey 는 폐기한다. 결제 실패로 PAST_DUE 인 경우 카드 변경 직후 바로 미납분을 다시 청구한다.",
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "authKey": {
+                    "type": "string",
+                    "description": "토스 결제수단 등록 성공 후 받은 authKey"
+                  },
+                  "customerKey": {
+                    "type": "string",
+                    "description": "GET /subscriptions/me 의 customerKey"
+                  }
+                },
+                "required": [
+                  "authKey",
+                  "customerKey"
+                ]
+              },
+              "example": {
+                "authKey": "string",
+                "customerKey": "string"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "결제 카드가 변경되었습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "message",
+                    "data",
+                    "errorCode"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "planCode": {
+                          "type": "string",
+                          "enum": [
+                            "STANDARD",
+                            "PRO"
+                          ],
+                          "description": "현재 요금제"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ACTIVE",
+                            "PAST_DUE",
+                            "CANCELED"
+                          ],
+                          "description": "ACTIVE 구독 중 / PAST_DUE 결제 실패 유예 중(혜택 유지, 재시도 중) / CANCELED 종료"
+                        },
+                        "currentPeriodStart": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "현재 구독 기간 시작"
+                        },
+                        "currentPeriodEnd": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "현재 구독 기간 끝(구독 크레딧 소멸 시점)"
+                        },
+                        "nextBillingAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "다음 결제 예정 일시 (해지 예약·종료면 null)",
+                          "nullable": true
+                        },
+                        "cancelAtPeriodEnd": {
+                          "type": "boolean",
+                          "description": "기간 끝에 해지 예정인지"
+                        },
+                        "scheduledPlanCode": {
+                          "type": "string",
+                          "enum": [
+                            "STANDARD",
+                            "PRO"
+                          ],
+                          "description": "다음 결제일부터 적용될 요금제 (변경 예약이 없으면 null)",
+                          "nullable": true
+                        },
+                        "failedAttempts": {
+                          "type": "integer",
+                          "description": "이번 결제일의 결제 실패 횟수"
+                        },
+                        "card": {
+                          "type": "object",
+                          "properties": {
+                            "company": {
+                              "type": "string",
+                              "description": "카드사"
+                            },
+                            "numberMasked": {
+                              "type": "string",
+                              "description": "마스킹된 카드번호"
+                            }
+                          },
+                          "description": "등록된 결제 카드",
+                          "required": [
+                            "company",
+                            "numberMasked"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "planCode",
+                        "status",
+                        "currentPeriodStart",
+                        "currentPeriodEnd",
+                        "nextBillingAt",
+                        "cancelAtPeriodEnd",
+                        "scheduledPlanCode",
+                        "failedAttempts",
+                        "card"
+                      ]
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "message": "결제 카드가 변경되었습니다.",
+                  "data": {
+                    "planCode": "STANDARD",
+                    "status": "ACTIVE",
+                    "currentPeriodStart": "2026-11-17T12:00:00Z",
+                    "currentPeriodEnd": "2026-11-17T12:00:00Z",
+                    "nextBillingAt": null,
+                    "cancelAtPeriodEnd": false,
+                    "scheduledPlanCode": null,
+                    "failedAttempts": 0,
+                    "card": {
+                      "company": "삼성",
+                      "numberMasked": "1234-56**-****-7890"
+                    }
+                  },
+                  "errorCode": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR: 요청 값 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "VALIDATION_ERROR": {
+                    "summary": "요청 값 오류",
+                    "value": {
+                      "success": false,
+                      "message": "요청 값이 올바르지 않습니다.",
+                      "data": null,
+                      "errorCode": "VALIDATION_ERROR"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED: accessToken 없음/만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "accessToken 없음/만료",
+                    "value": {
+                      "success": false,
+                      "message": "로그인이 필요합니다.",
+                      "data": null,
+                      "errorCode": "UNAUTHORIZED"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "PAYMENT_FAILED: 새 카드 등록 실패 (또는 PAST_DUE 상태에서 즉시 재결제에 실패)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "PAYMENT_FAILED": {
+                    "summary": "새 카드 등록 실패 (또는 PAST_DUE 상태에서 즉시 재결제에 실패)",
+                    "value": {
+                      "success": false,
+                      "message": "결제에 실패하였습니다.",
+                      "data": null,
+                      "errorCode": "PAYMENT_FAILED"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF_INVALID: X-CSRF-Token 헤더 누락 또는 쿠키와 불일치",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CSRF_INVALID": {
+                    "summary": "X-CSRF-Token 헤더 누락 또는 쿠키와 불일치",
+                    "value": {
+                      "success": false,
+                      "message": "CSRF 검증에 실패했습니다.",
+                      "data": null,
+                      "errorCode": "CSRF_INVALID"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_SUBSCRIBED: 구독 중이 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "NOT_SUBSCRIBED": {
+                    "summary": "구독 중이 아님",
+                    "value": {
+                      "success": false,
+                      "message": "구독 중이 아닙니다.",
+                      "data": null,
+                      "errorCode": "NOT_SUBSCRIBED"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/subscriptions/me/invoices": {
+      "get": {
+        "tags": [
+          "Subscription"
+        ],
+        "summary": "구독 결제 내역 조회",
+        "operationId": "op143",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "페이지 번호(0부터, 기본 0)",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 0
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "페이지 크기(기본 20, 최대 50)",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 20
+          }
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "요청이 성공했습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "message",
+                    "data",
+                    "errorCode"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "description": "청구 ID"
+                              },
+                              "orderNo": {
+                                "type": "string",
+                                "description": "주문번호 (성공한 결제만, 실패면 null)",
+                                "nullable": true
+                              },
+                              "planCode": {
+                                "type": "string",
+                                "enum": [
+                                  "STANDARD",
+                                  "PRO"
+                                ],
+                                "description": "청구된 요금제"
+                              },
+                              "periodStart": {
+                                "type": "string",
+                                "format": "date-time",
+                                "description": "청구 대상 기간 시작"
+                              },
+                              "periodEnd": {
+                                "type": "string",
+                                "format": "date-time",
+                                "description": "청구 대상 기간 끝"
+                              },
+                              "amount": {
+                                "type": "integer",
+                                "description": "청구 금액(원)"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "PAID",
+                                  "FAILED"
+                                ],
+                                "description": "결제 결과"
+                              },
+                              "failReason": {
+                                "type": "string",
+                                "description": "실패 사유 (성공이면 null)",
+                                "nullable": true
+                              },
+                              "creditsGranted": {
+                                "type": "integer",
+                                "description": "이 결제로 지급된 크레딧"
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "description": "청구 일시"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "orderNo",
+                              "planCode",
+                              "periodStart",
+                              "periodEnd",
+                              "amount",
+                              "status",
+                              "failReason",
+                              "creditsGranted",
+                              "createdAt"
+                            ]
+                          },
+                          "description": "목록"
+                        },
+                        "page": {
+                          "type": "integer",
+                          "description": "현재 페이지"
+                        },
+                        "size": {
+                          "type": "integer",
+                          "description": "페이지 크기"
+                        },
+                        "totalElements": {
+                          "type": "integer",
+                          "description": "전체 개수"
+                        },
+                        "totalPages": {
+                          "type": "integer",
+                          "description": "전체 페이지 수"
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "page",
+                        "size",
+                        "totalElements",
+                        "totalPages"
+                      ]
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "message": "요청이 성공했습니다.",
+                  "data": {
+                    "items": [
+                      {
+                        "id": "id-001",
+                        "orderNo": "EMX20261117AB12CD34",
+                        "planCode": "STANDARD",
+                        "periodStart": "2026-11-17T12:00:00Z",
+                        "periodEnd": "2026-11-17T12:00:00Z",
+                        "amount": 4900,
+                        "status": "PAID",
+                        "failReason": null,
+                        "creditsGranted": 70,
+                        "createdAt": "2026-11-17T12:00:00Z"
+                      }
+                    ],
+                    "page": 0,
+                    "size": 20,
+                    "totalElements": 1,
+                    "totalPages": 1
+                  },
+                  "errorCode": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR: 요청 값 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "VALIDATION_ERROR": {
+                    "summary": "요청 값 오류",
+                    "value": {
+                      "success": false,
+                      "message": "요청 값이 올바르지 않습니다.",
+                      "data": null,
+                      "errorCode": "VALIDATION_ERROR"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED: accessToken 없음/만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "accessToken 없음/만료",
+                    "value": {
+                      "success": false,
+                      "message": "로그인이 필요합니다.",
+                      "data": null,
+                      "errorCode": "UNAUTHORIZED"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/billing/run": {
+      "get": {
+        "tags": [
+          "Subscription"
+        ],
+        "summary": "정기결제 실행(크론)",
+        "operationId": "op144",
+        "description": "사용자 API 가 아니라 Vercel Cron 이 하루 한 번(한국 시간 00:10) 호출한다. Vercel 이 CRON_SECRET 환경변수 값을 Authorization: Bearer 로 붙이며 틀리면 401. 결제일이 지난 ACTIVE 구독을 청구해 성공하면 기간을 한 달 연장하고 월 크레딧을 새로 지급한다(남은 구독 크레딧은 소멸, 이월 없음). 실패하면 PAST_DUE 로 바꾸고 다음 날부터 하루 간격으로 최대 3회 재시도하며, 모두 실패하면 CANCELED(FREE 로 복귀). 해지 예약된 구독은 기간 끝에 CANCELED 로 바꾼다. 같은 결제일을 두 번 청구하지 않도록 결제일당 한 번만 처리하며 여러 번 호출해도 결과가 같다.",
+        "security": [
+          {
+            "cronSecret": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "요청이 성공했습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "message",
+                    "data",
+                    "errorCode"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "processed": {
+                          "type": "integer",
+                          "description": "처리 대상이 된 구독 수"
+                        },
+                        "charged": {
+                          "type": "integer",
+                          "description": "결제에 성공한 수"
+                        },
+                        "failed": {
+                          "type": "integer",
+                          "description": "이번에 결제에 실패한 수"
+                        },
+                        "ended": {
+                          "type": "integer",
+                          "description": "기간이 끝나 종료(CANCELED)된 수"
+                        }
+                      },
+                      "required": [
+                        "processed",
+                        "charged",
+                        "failed",
+                        "ended"
+                      ]
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "message": "요청이 성공했습니다.",
+                  "data": {
+                    "processed": 3,
+                    "charged": 2,
+                    "failed": 1,
+                    "ended": 0
+                  },
+                  "errorCode": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED: Authorization(Bearer CRON_SECRET) 없음/불일치",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "Authorization(Bearer CRON_SECRET) 없음/불일치",
+                    "value": {
+                      "success": false,
+                      "message": "로그인이 필요합니다.",
+                      "data": null,
+                      "errorCode": "UNAUTHORIZED"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -27248,6 +29275,10 @@
         "type": "apiKey",
         "in": "header",
         "name": "X-Worker-Key"
+      },
+      "cronSecret": {
+        "type": "http",
+        "scheme": "bearer"
       }
     },
     "schemas": {

@@ -10,6 +10,6 @@ import { TossService } from './toss.service.js';
   imports: [CommunityModule],
   controllers: [PaymentController, DonationController, SellerController],
   providers: [OrderService, TossService],
-  exports: [OrderService],
+  exports: [OrderService, TossService],
 })
 export class PaymentModule {}

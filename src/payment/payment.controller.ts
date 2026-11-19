@@ -10,7 +10,7 @@ import { PrismaService } from '../prisma.service.js';
 import { OrderService, orderView } from './order.service.js';
 import { TossService } from './toss.service.js';
 
-const TYPES = ['PRODUCT', 'CREDIT_PACKAGE', 'DONATION'] as const;
+const TYPES = ['PRODUCT', 'CREDIT_PACKAGE', 'DONATION', 'SUBSCRIPTION'] as const;
 const STATUSES = ['PENDING_PAYMENT', 'PAID', 'CANCELED', 'REFUNDED', 'EXPIRED'] as const;
 
 @Controller()

@@ -24,7 +24,10 @@ describe('캐릭터·생성·워커·지갑·다운로드', () => {
     const t = (await c.get('/auth/csrf')).body.data.csrfToken;
     return c.agent.post('/api/v1' + url).set('X-CSRF-Token', t).set('Idempotency-Key', key).send(body);
   }
-  const balance = async (c: Client) => (await c.get('/wallet')).body.data.credit as { balance: number; reserved: number };
+  const balance = async (c: Client) => {
+    const { balance: b, reserved } = (await c.get('/wallet')).body.data.credit as { balance: number; reserved: number };
+    return { balance: b, reserved }; // 구독 관련 필드는 구독 테스트에서 검증한다
+  };
 
   it('프리셋 조회, 캐릭터 CRUD, 후보 생성 → 워커 처리 → 확정', async () => {
     const { c } = await signedUp(app, ctx.mail);

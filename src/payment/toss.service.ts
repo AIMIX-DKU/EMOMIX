@@ -49,6 +49,37 @@ export class TossService {
     if (!r.ok) throw new ApiError('PAYMENT_FAILED', '환불 요청에 실패했습니다.');
   }
 
+  // ───────── 자동결제(빌링) ─────────
+  /** 카드 등록 성공 후 받은 authKey 로 billingKey 를 발급받는다. 카드번호 원문은 받지도 저장하지도 않는다(마스킹 값만). */
+  async issueBillingKey(authKey: string, customerKey: string): Promise<{ billingKey: string; cardCompany: string; cardNumberMasked: string }> {
+    if (this.mock) {
+      if (authKey.startsWith('fail_')) throw new ApiError('PAYMENT_FAILED', '카드 등록에 실패했습니다.');
+      // authKey 에 renewfail 이 들어 있으면 이후 갱신 결제가 실패하는 카드로 흉내낸다(테스트 전용)
+      return { billingKey: `mock_bk_${authKey.includes('renewfail') ? 'renewfail_' : ''}${Math.random().toString(36).slice(2, 10)}`, cardCompany: '삼성', cardNumberMasked: '1234-56**-****-7890' };
+    }
+    const r = await fetch(`${API.replace('/payments', '/billing')}/authorizations/issue`, {
+      method: 'POST', headers: this.headers(), body: JSON.stringify({ authKey, customerKey }),
+    });
+    const j = (await r.json().catch(() => ({}))) as { billingKey?: string; cardCompany?: string; card?: { number?: string; issuerCode?: string }; cardNumber?: string; message?: string };
+    if (!r.ok || !j.billingKey) throw new ApiError('PAYMENT_FAILED', j.message ? `카드 등록에 실패했습니다. (${j.message})` : '카드 등록에 실패했습니다.');
+    const num = (j.cardNumber ?? j.card?.number ?? '').replace(/(\d{4})(\d{2})(\d*)(\d{4})?/, '$1-$2**-****-$4') || '카드';
+    return { billingKey: j.billingKey, cardCompany: j.cardCompany ?? j.card?.issuerCode ?? '카드', cardNumberMasked: num };
+  }
+
+  /** 등록된 카드로 청구한다. orderId 는 청구마다 고유해야 한다(같은 orderId 로 다시 요청해도 PG 가 중복 결제를 막는다). */
+  async chargeBilling(p: { billingKey: string; customerKey: string; amount: number; orderId: string; orderName: string }): Promise<TossPayment> {
+    if (this.mock) {
+      if (p.billingKey.includes('renewfail') && p.orderName.includes('갱신')) throw new ApiError('PAYMENT_FAILED', '카드 잔액 부족');
+      return { paymentKey: `mock_pay_${p.orderId}`, orderId: p.orderId, status: 'DONE', totalAmount: p.amount, method: 'card', approvedAt: new Date().toISOString() };
+    }
+    const r = await fetch(`${API.replace('/payments', '/billing')}/${encodeURIComponent(p.billingKey)}`, {
+      method: 'POST', headers: this.headers(), body: JSON.stringify({ customerKey: p.customerKey, amount: p.amount, orderId: p.orderId, orderName: p.orderName }),
+    });
+    const j = (await r.json().catch(() => ({}))) as Partial<TossPayment> & { message?: string };
+    if (!r.ok || j.status !== 'DONE') throw new ApiError('PAYMENT_FAILED', j.message ? `결제에 실패하였습니다. (${j.message})` : undefined);
+    return j as TossPayment;
+  }
+
   /** 웹훅 본문을 그대로 믿지 않고 PG 에서 결제 상태를 다시 조회한다. */
   async get(paymentKey: string, hint: { orderId: string; status: string; amount: number }): Promise<TossPayment | null> {
     if (this.mock) return { paymentKey, orderId: hint.orderId, status: hint.status, totalAmount: hint.amount };
