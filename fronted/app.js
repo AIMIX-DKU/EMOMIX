@@ -1,3 +1,4 @@
+import { createLiveApp } from './live.js';
 import {
   createIcons,
   Bell,
@@ -615,12 +616,41 @@ const refreshIcons = () =>
     admin,
     editor,
   };
+  const live = createLiveApp({
+    root,
+    navigate(page, preserve) {
+      if (typeof preserve === 'string') tab = preserve;
+      show(page, !!preserve);
+    },
+    notify: say,
+  });
+
   function show(page, keepTab = false) {
     if (!screens[page]) return;
     if (!keepTab) tab = '';
     current = page;
     notice.hidden = true;
-    main.innerHTML = screens[page]();
+    live.invalidate();
+    const liveScreen = live.render(page, tab);
+    main.innerHTML = liveScreen ?? screens[page]();
+    if (liveScreen !== null) {
+      root
+        .querySelectorAll('[data-go]')
+        .forEach((button) =>
+          button.setAttribute(
+            'aria-current',
+            button.dataset.go === page ? 'page' : 'false',
+          ),
+        );
+      refreshIcons();
+      void live.load();
+      return;
+    }
+    const demoNote = document.createElement('p');
+    demoNote.className = 'muted space';
+    demoNote.textContent =
+      '이 영역은 화면 체험용입니다. 결제·변경은 실제 서버에 반영되지 않습니다.';
+    main.prepend(demoNote);
     if (page === 'library' && tab !== '구매한 작품' && tab !== '북마크')
       main.querySelectorAll('[data-safe-name]').forEach((el, i) => {
         el.textContent = saved[i]?.name || '내 작품';

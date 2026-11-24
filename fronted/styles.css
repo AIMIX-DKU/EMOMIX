@@ -636,3 +636,17 @@ body {
   margin: 0;
   background: #f8fbff;
 }
+
+#emomix-full .live-image {
+  display: block;
+  width: min(100%, 180px);
+  height: auto;
+  max-height: 220px;
+  object-fit: contain;
+}
+#emomix-full .live-error {
+  color: #a0213d;
+}
+#emomix-full .live-terms .terms {
+  white-space: pre-wrap;
+}
