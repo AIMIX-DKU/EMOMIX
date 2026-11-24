@@ -1,0 +1,81 @@
+name: backend-ci
+
+# backend/ 가 바뀐 PR 에서만 실행한다(프론트만 바뀐 PR 은 건너뜀).
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+
+# e2e 는 공용 테스트 DB(Neon test 브랜치)를 쓰므로 한 번에 하나만 돌린다(동시에 돌면 서로의 데이터와 작업 대기열을 건드림).
+concurrency:
+  group: backend-e2e
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  check:
+    name: 빌드·명세 일치 확인
+    runs-on: ubuntu-latest
+    outputs:
+      e2e: ${{ steps.changes.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          # 코드·스키마·테스트·의존성이 바뀐 경우에만 e2e 를 돌린다(문서만 바뀌면 건너뜀)
+          filters: |
+            e2e:
+              - 'backend/src/**'
+              - 'backend/prisma/**'
+              - 'backend/test/**'
+              - 'backend/api/**'
+              - 'backend/package.json'
+              - 'backend/package-lock.json'
+              - '.github/workflows/backend-ci.yml'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: 구현이 명세(docs/openapi.json)와 일치하는지
+        run: node scripts/check-routes.mjs
+
+  e2e:
+    name: e2e 테스트(테스트 전용 DB)
+    needs: check
+    if: needs.check.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      WORKER_API_KEY: ${{ secrets.WORKER_API_KEY }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+      S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+      S3_REGION: ${{ secrets.S3_REGION }}
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+      S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: 테스트 DB 에 마이그레이션 적용과 시드(여러 번 실행해도 안전)
+        run: |
+          npx prisma migrate deploy
+          node prisma/seed.mjs
+      - run: npm run test:e2e
