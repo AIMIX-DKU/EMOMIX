@@ -1,0 +1,283 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@600;700&family=Noto+Sans+KR:wght@400;600;700&display=swap');
+
+:root {
+  color-scheme: light;
+  font-family: 'Instrument Sans', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+  color: #142b4b;
+  background: #f8fbff;
+  --blue: #235dde;
+  --muted: #536984;
+}
+
+* {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none !important;
+}
+body {
+  margin: 0;
+}
+
+.container {
+  width: min(920px, calc(100% - 36px));
+  margin-inline: auto;
+}
+
+.site-header {
+  background: #fff;
+  border-bottom: 1px solid #dde8f5;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.brand small {
+  margin-left: 5px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+}
+
+.brand-mark {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+
+.brand-mark::before,
+.brand-mark::after {
+  position: absolute;
+  width: 21px;
+  height: 21px;
+  border-radius: 32%;
+  content: '';
+}
+
+.brand-mark::before {
+  top: 2px;
+  left: 1px;
+  background: #94ceff;
+  transform: rotate(-15deg);
+}
+
+.brand-mark::after {
+  right: 1px;
+  bottom: 2px;
+  background:
+    radial-gradient(circle at 29% 28%, #fff 0 10%, transparent 12%), var(--blue);
+  transform: rotate(10deg);
+}
+
+.studio {
+  display: grid;
+  gap: 18px;
+  padding-block: 24px 48px;
+}
+
+.hero {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  align-items: center;
+  min-height: 145px;
+  padding: 24px clamp(18px, 5vw, 38px);
+  overflow: hidden;
+  border-radius: 18px;
+  background: #edf5ff;
+}
+.hero::before,
+.hero::after {
+  position: absolute;
+  z-index: -1;
+  width: clamp(100px, 22vw, 160px);
+  aspect-ratio: 1;
+  border-radius: 34%;
+  content: '';
+}
+
+.hero::before {
+  top: -38%;
+  right: 8%;
+  background: #d6eaff;
+  transform: rotate(-18deg);
+}
+
+.hero::after {
+  right: -1%;
+  bottom: -47%;
+  background: #aacefacc;
+  transform: rotate(15deg);
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 5vw, 3.15rem);
+  line-height: 1.25;
+  letter-spacing: -0.065em;
+}
+
+.panel {
+  min-width: 0;
+  padding: 17px;
+  border-radius: 15px;
+  background: #fff;
+}
+
+.prompt-panel {
+  background: #eaf3ff;
+}
+
+.field-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+label,
+h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.count {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+textarea,
+button,
+.result-actions a {
+  font: inherit;
+}
+
+textarea {
+  display: block;
+  width: 100%;
+  min-height: 130px;
+  margin-top: 12px;
+  padding: 13px;
+  resize: vertical;
+  border: 1px solid #bfcfe2;
+  border-radius: 10px;
+  background: #fff;
+  color: inherit;
+  line-height: 1.6;
+}
+
+textarea::placeholder {
+  color: #60738b;
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 9px 13px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary {
+  background: var(--blue);
+  color: #fff;
+}
+
+.primary:hover {
+  background: #1749ba;
+}
+.primary:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.secondary {
+  border-color: #cad8ea;
+  background: #fff;
+  color: #294762;
+}
+
+.secondary:hover {
+  background: #eef5ff;
+}
+
+.generate {
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 12px;
+}
+
+:focus-visible {
+  outline: 2px solid #235dde;
+  outline-offset: 3px;
+}
+
+.status {
+  margin: 6px 0 12px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+.status.error {
+  color: #a0213d;
+}
+
+.result-stage {
+  display: grid;
+  min-height: 206px;
+  place-items: center;
+  border-radius: 12px;
+  background: #edf5ff;
+}
+
+.empty-sticker {
+  width: 48px;
+  height: 48px;
+  border: 1.5px dashed #88acd3;
+  border-radius: 15px;
+  background: #f1f7ff;
+  box-shadow: 8px 8px 0 #cbdff5;
+  transform: rotate(-10deg);
+}
+
+.result-stage img {
+  display: block;
+  width: min(100%, 177px);
+  height: auto;
+}
+
+.result-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+@media (min-width: 700px) {
+  .studio {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: start;
+  }
+
+  .hero {
+    grid-column: 1 / -1;
+  }
+}

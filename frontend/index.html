@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EmoMix · 나만의 이모티콘</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <div id="emomix-full">
+      <header>
+        <button class="brand" data-go="studio" aria-label="EmoMix 만들기 홈">
+          <span class="logo" aria-hidden="true"></span><b>EmoMix</b
+          ><small>by AIMIX</small>
+        </button>
+        <nav aria-label="서비스">
+          <button data-go="studio">만들기</button
+          ><button data-go="library">보관함</button
+          ><button data-go="community">커뮤니티</button
+          ><button data-go="market">마켓</button>
+        </nav>
+        <div class="account">
+          <button data-go="notifications" aria-label="알림">
+            <i data-lucide="bell" aria-hidden="true"></i></button
+          ><button data-auth-tab="로그인">로그인</button
+          ><button data-auth-tab="회원가입" class="primary">회원가입</button>
+        </div>
+      </header>
+      <div class="shell">
+        <aside>
+          <p>내 작업 공간</p>
+          <button data-go="library">
+            <i data-lucide="folder-heart" aria-hidden="true"></i>내 보관함</button
+          ><button data-go="jobs">
+            <i data-lucide="clock-3" aria-hidden="true"></i>생성 내역</button
+          ><button data-go="orders">
+            <i data-lucide="shopping-bag" aria-hidden="true"></i>구매·후원
+          </button>
+          <p>계정과 운영</p>
+          <button data-go="profile">내 정보·설정</button
+          ><button data-go="creator">창작자 센터</button
+          ><button data-go="admin">관리자</button>
+          <div class="side-note">
+            로그인·제작 API 연결<br />커뮤니티·결제는 체험 화면입니다.
+          </div>
+        </aside>
+        <main id="mix-content" aria-label="EmoMix 화면"></main>
+      </div>
+      <p class="notice" role="status" hidden></p>
+      <section
+        class="overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mix-modal-title"
+        hidden
+      >
+        <div class="modal">
+          <div class="modal-head">
+            <h2 id="mix-modal-title"></h2>
+            <button data-close aria-label="닫기">×</button>
+          </div>
+          <div class="modal-body"></div>
+        </div>
+      </section>
+      <footer>
+        EmoMix <span>by AIMIX</span><span>이용약관 · 개인정보 처리방침</span>
+      </footer>
+    </div>
+  </body>
+</html>

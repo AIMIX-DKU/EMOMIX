@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Set content to /api/v1 when served with the authenticated API on the same origin. -->
+    <meta name="emomix-api-base" content="/api/v1" />
+    <title>나만의 이모티콘 · EmoMix</title>
+    <link rel="stylesheet" href="./generation.css" />
+    <script type="module" src="./generation.js"></script>
+  </head>
+
+  <body>
+    <header class="site-header">
+      <div class="container brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>EmoMix <small>by AIMIX</small></span>
+      </div>
+    </header>
+
+    <main class="container studio">
+      <div class="hero">
+        <h1>나만의 이모티콘</h1>
+      </div>
+
+      <form id="generation-form" class="panel prompt-panel">
+        <div class="field-heading">
+          <label for="prompt">어떤 캐릭터를 만들까요?</label>
+          <span id="count" class="count" aria-hidden="true">0 / 500</span>
+        </div>
+        <textarea
+          id="prompt"
+          name="prompt"
+          rows="4"
+          maxlength="500"
+          placeholder="예시) 졸린 초록색 별 캐릭터"
+          required
+        ></textarea>
+        <button id="generate" class="primary generate" type="submit">
+          <span id="generate-label">이모티콘 만들기</span>
+          <span aria-hidden="true">↗</span>
+        </button>
+      </form>
+
+      <section class="panel" aria-labelledby="result-title">
+        <h2 id="result-title">생성 결과</h2>
+        <p id="status" class="status" role="status">
+          프롬프트를 입력하면 여기에 결과가 표시돼요.
+        </p>
+        <div class="result-stage">
+          <div id="empty-result" class="empty-sticker" aria-hidden="true"></div>
+          <img id="result-image" width="256" height="256" alt="" hidden />
+        </div>
+        <div id="result-actions" class="result-actions" hidden>
+          <a id="download" class="primary" download="emomix-sticker.png"
+            >PNG 다운로드</a
+          >
+          <button id="skip" class="secondary" type="button">건너뛰기</button>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
