@@ -1,61 +1,71 @@
 <!doctype html>
 <html lang="ko">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- Set content to /api/v1 when served with the authenticated API on the same origin. -->
-    <meta name="emomix-api-base" content="">
-    <title>나만의 이모티콘 · EmoMix</title>
-    <link rel="stylesheet" href="./styles.css">
-    <script src="./app.js" defer></script>
-</head>
-
-<body>
-    <header class="site-header">
-        <div class="container brand">
-            <span class="brand-mark" aria-hidden="true"></span>
-            <span>EmoMix <small>by AIMIX</small></span>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EmoMix · 나만의 이모티콘</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <div id="emomix-full">
+      <header>
+        <button class="brand" data-go="studio" aria-label="EmoMix 만들기 홈">
+          <span class="logo" aria-hidden="true"></span><b>EmoMix</b
+          ><small>by AIMIX</small>
+        </button>
+        <nav aria-label="서비스">
+          <button data-go="studio">만들기</button
+          ><button data-go="library">보관함</button
+          ><button data-go="community">커뮤니티</button
+          ><button data-go="market">마켓</button>
+        </nav>
+        <div class="account">
+          <button data-go="notifications" aria-label="알림">
+            <i data-lucide="bell" aria-hidden="true"></i></button
+          ><button data-auth-tab="로그인">로그인</button
+          ><button data-auth-tab="회원가입" class="primary">회원가입</button>
         </div>
-    </header>
-
-    <main class="container studio">
-        <div class="hero">
-            <h1>나만의 이모티콘</h1>
+      </header>
+      <div class="shell">
+        <aside>
+          <p>내 작업 공간</p>
+          <button data-go="library">
+            <i data-lucide="folder-heart" aria-hidden="true"></i>내 보관함</button
+          ><button data-go="jobs">
+            <i data-lucide="clock-3" aria-hidden="true"></i>생성 내역</button
+          ><button data-go="orders">
+            <i data-lucide="shopping-bag" aria-hidden="true"></i>구매·후원
+          </button>
+          <p>계정과 운영</p>
+          <button data-go="profile">내 정보·설정</button
+          ><button data-go="creator">창작자 센터</button
+          ><button data-go="admin">관리자</button>
+          <div class="side-note">
+            화면 체험 모드<br />작품·금액·계정은 샘플입니다.
+          </div>
+        </aside>
+        <main id="mix-content" aria-label="EmoMix 화면"></main>
+      </div>
+      <p class="notice" role="status" hidden></p>
+      <section
+        class="overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mix-modal-title"
+        hidden
+      >
+        <div class="modal">
+          <div class="modal-head">
+            <h2 id="mix-modal-title"></h2>
+            <button data-close aria-label="닫기">×</button>
+          </div>
+          <div class="modal-body"></div>
         </div>
-
-        <form id="generation-form" class="panel prompt-panel">
-            <div class="field-heading">
-                <label for="prompt">어떤 캐릭터를 만들까요?</label>
-                <span id="count" class="count" aria-hidden="true">0 / 500</span>
-            </div>
-            <textarea
-            id="prompt"
-            name="prompt"
-            rows="4"
-            maxlength="500"
-            placeholder="예시) 졸린 초록색 별 캐릭터"
-            required
-            ></textarea>
-            <button id="generate" class="primary generate" type="submit">
-                <span id="generate-label">이모티콘 만들기</span>
-                <span aria-hidden="true">↗</span>
-            </button>
-        </form>
-
-        <section class="panel" aria-labelledby="result-title">
-            <h2 id="result-title">생성 결과</h2>
-            <p id="status" class="status" role="status">
-                프롬프트를 입력하면 여기에 결과가 표시돼요.
-            </p>
-            <div class="result-stage">
-                <div id="empty-result" class="empty-sticker" aria-hidden="true"></div>
-                <img id="result-image" width="256" height="256" alt="" hidden>
-            </div>
-            <div id="result-actions" class="result-actions" hidden>
-                <a id="download" class="primary" download="emomix-sticker.png">PNG 다운로드</a>
-                <button id="skip" class="secondary" type="button">건너뛰기</button>
-            </div>
-        </section>
-    </main>
-</body>
+      </section>
+      <footer>
+        EmoMix <span>by AIMIX</span><span>이용약관 · 개인정보 처리방침</span>
+      </footer>
+    </div>
+  </body>
 </html>
