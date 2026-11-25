@@ -1,4 +1,4 @@
-import { api } from './api.js';
+import { api, ApiError } from './api.js';
 import { h, id, heading, panel, field, money, date } from './service-ui.js';
 
 export function createAdmin(ui) {
@@ -14,7 +14,8 @@ export function createAdmin(ui) {
   };
   async function admin(params) {
     const user = await api('/users/me');
-    if (user.role !== 'ADMIN') throw Error('관리자 권한이 필요합니다.');
+    if (user.role !== 'ADMIN')
+      throw new ApiError('관리자 권한이 필요합니다.', 403, 'FORBIDDEN');
     const tab = params.tab || 'reports';
     const menu =
       '<div class="row space">' +
