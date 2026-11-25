@@ -3,6 +3,14 @@
     {
       "source": "/api/:path*",
       "destination": "https://emomix-backend.vercel.app/api/:path*"
+    },
+    {
+      "source": "/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/signup/discord",
+      "destination": "/index.html"
     }
   ]
 }
