@@ -493,6 +493,8 @@ export function createWorkshop(ui) {
   async function job(params) {
     const j = await api('/generations/' + id(params.id));
     const active = ['QUEUED', 'RUNNING'].includes(j.status);
+    const delayed =
+      j.status === 'QUEUED' && Date.now() - Date.parse(j.createdAt) >= 60000;
     const result =
       j.result?.images?.map((i) => picture(i.imageUrl, '생성 결과')).join('') ||
       '';
@@ -511,6 +513,9 @@ export function createWorkshop(ui) {
           h(j.errorCode || '') +
           '</p>' +
           '<div class="grid">' +
+          (delayed
+            ? '<p role="status">아직 생성이 시작되지 않았어요. 대기가 계속되면 운영자에게 작업 수신 상태를 문의하거나 대기 취소를 선택해 주세요. 대기 취소 시 예약 크레딧은 반환됩니다.</p>'
+            : '') +
           result +
           '</div><div class="row">' +
           ui.link('새로고침', 'job', params) +
