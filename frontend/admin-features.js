@@ -1,4 +1,5 @@
 import { api, ApiError } from './api.js';
+import { label } from './labels.js';
 import { h, id, heading, panel, field, money, date } from './service-ui.js';
 
 export function createAdmin(ui) {
@@ -59,7 +60,7 @@ export function createAdmin(ui) {
                   ' · ' +
                   h(r.reason) +
                   '<p>' +
-                  h(r.status) +
+                  h(label(r.status)) +
                   '</p></div>' +
                   ui.action('상세·처리', async () => {
                     const detail = await api(
@@ -122,7 +123,7 @@ export function createAdmin(ui) {
                     '<div class="list-row"><div>' +
                     h(u.nickname) +
                     ' · ' +
-                    h(u.status) +
+                    h(label(u.status)) +
                     '<p>' +
                     h(u.email) +
                     '</p></div><div class="row">' +
@@ -294,7 +295,7 @@ export function createAdmin(ui) {
                   '<div class="list-row"><div>' +
                   h(s.creatorId) +
                   '<p>' +
-                  h(s.status) +
+                  h(label(s.status)) +
                   ' · ' +
                   money(s.amount) +
                   ' · ' +

@@ -5,8 +5,12 @@ import {
   Clock3,
   ShoppingBag,
   ImagePlus,
+  Wallet,
 } from 'lucide';
 import { createLiveApp } from './live.js';
+import { createShell } from './shell.js';
+import { api } from './api.js';
+import { DISCORD_PATH } from './icons.js';
 import { createUI, heading, panel, h } from './service-ui.js';
 import { createPayments } from './payments.js';
 import { createAccount } from './account-features.js';
@@ -26,11 +30,12 @@ function notify(message) {
 }
 function icons() {
   createIcons({
-    icons: { Bell, FolderHeart, Clock3, ShoppingBag, ImagePlus },
+    icons: { Bell, FolderHeart, Clock3, ShoppingBag, ImagePlus, Wallet },
     attrs: { width: 15, height: 15 },
   });
 }
 const ui = createUI(root, go, notify);
+const shell = createShell(root);
 const live = createLiveApp({
   root,
   navigate(page, keep) {
@@ -41,7 +46,50 @@ const live = createLiveApp({
 });
 const payments = createPayments(ui),
   workshop = createWorkshop(ui);
+const DISCORD_LOGIN =
+  '<div class="divider"><span>또는</span></div>' +
+  '<a class="btn-discord" href="/api/v1/auth/discord?mode=LOGIN&redirectPath=/">' +
+  '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="currentColor" d="' +
+  DISCORD_PATH +
+  '"/></svg>' +
+  '<span>Discord로 계속하기</span></a>';
+const TITLES = {
+  studio: '만들기',
+  library: '내 보관함',
+  jobs: '생성 내역',
+  wallet: '지갑·충전',
+  orders: '구매·후원',
+  subscription: '구독 관리',
+  profile: '내 정보·설정',
+  creator: '창작자 센터',
+  admin: '관리자',
+  community: '커뮤니티',
+  market: '마켓',
+  notifications: '알림',
+  rankings: '랭킹',
+  terms: '약관',
+  auth: '로그인',
+};
 const routes = {
+  terms: async () => {
+    const terms = (await api('/terms')).items.filter((t) => t.type !== 'CREATOR');
+    return (
+      heading('이용약관·개인정보 처리방침') +
+      terms
+        .map((t) =>
+          panel(
+            '<h2>' +
+              h(t.title) +
+              '</h2>' +
+              ui.action('내용 보기', async () => {
+                const detail = await api('/terms/' + encodeURIComponent(t.id));
+                ui.dialog(detail.title, '<div class="terms">' + h(detail.content) + '</div>');
+              }),
+          ),
+        )
+        .join('')
+    );
+  },
   ...createAccount(ui, payments),
   ...workshop.routes,
   ...createSocial(ui, payments),
@@ -55,6 +103,7 @@ function profileLinks() {
     ui.link('계정·보안', 'security') +
     ui.link('알림 설정', 'settings') +
     ui.link('약관·탈퇴', 'agreements') +
+    ui.link('내 신고 내역', 'reports') +
     ui.link('구독 관리', 'subscription') +
     '</div>'
   );
@@ -62,7 +111,12 @@ function profileLinks() {
 async function go(page = 'studio', values = {}, record = true) {
   const epoch = ui.next();
   live.invalidate();
+  const leaving = route;
   route = page;
+  document.title = (TITLES[page] ? TITLES[page] + ' · ' : '') + 'EmoMix';
+  // 로그인·결제처럼 계정 상태가 바뀌는 화면을 지나면 바로 다시 읽는다.
+  const volatile = ['auth', 'payment', 'discord-signup'];
+  shell.refresh(volatile.includes(leaving) || volatile.includes(page));
   params = values;
   notice.hidden = true;
   if (record) {
@@ -100,13 +154,8 @@ async function go(page = 'studio', values = {}, record = true) {
       main.innerHTML = body;
       if (page === 'profile')
         main.insertAdjacentHTML('afterbegin', profileLinks());
-      if (page === 'auth') {
-        main
-          .querySelector('.auth-panel')
-          .insertAdjacentHTML(
-            'beforeend',
-            '<div class="row top"><a class="secondary download" href="/api/v1/auth/discord?mode=LOGIN&redirectPath=/">Discord로 로그인</a></div>',
-          );
+      if (page === 'auth' && values.tab !== '비밀번호 찾기') {
+        main.querySelector('.auth-panel').insertAdjacentHTML('beforeend', DISCORD_LOGIN);
       }
       icons();
       await live.load();
@@ -119,20 +168,23 @@ async function go(page = 'studio', values = {}, record = true) {
     }
   } catch (error) {
     if (!ui.valid(epoch)) return;
+    const denied = error.status === 403;
     main.innerHTML =
       heading(
         error.status === 401
           ? '로그인이 필요해요'
-          : error.status === 403
-            ? '이용 권한을 확인해 주세요'
+          : denied
+            ? '접근 권한이 없어요'
             : '화면을 불러오지 못했어요',
       ) +
       panel(
         '<p role="alert">' +
-          h(error.message) +
+          h(denied ? '이 화면을 볼 수 있는 권한이 없는 계정이에요.' : error.message) +
           '</p><div class="row">' +
-          ui.link('로그인', 'auth') +
-          ui.action('다시 시도', () => go(page, values)) +
+          (denied
+            ? ui.link('처음으로', 'studio')
+            : ui.link('로그인', 'auth') +
+              ui.action('다시 시도', () => go(page, values))) +
           '</div>',
       );
   }

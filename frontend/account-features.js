@@ -1,10 +1,12 @@
 import { api } from './api.js';
+import { label, cardCompany } from './labels.js';
 import {
   h,
   id,
   heading,
   panel,
   field,
+  empty,
   money,
   date,
 } from './service-ui.js';
@@ -257,6 +259,7 @@ export function createAccount(ui, payments) {
             .join(''),
         ),
       { ...params, route: 'notifications' },
+      { empty: empty(params.unread ? '안 읽은 알림이 없어요.' : '새 알림이 없어요. 좋아요, 댓글, 결제 소식이 여기에 모여요.') },
     );
     return (
       heading('알림', '안 읽은 알림 ' + count.count + '개') +
@@ -304,7 +307,7 @@ export function createAccount(ui, payments) {
                   .map(
                     (r) =>
                       '<div class="list-row"><div>' +
-                      h(r.reason || r.type) +
+                      h(r.reason || label(r.type)) +
                       '<small> · ' +
                       date(r.createdAt) +
                       '</small></div><strong>' +
@@ -382,9 +385,9 @@ export function createAccount(ui, payments) {
               .map(
                 (i) =>
                   '<div class="list-row"><div>' +
-                  h(i.planCode) +
+                  h(label(i.planCode)) +
                   ' · ' +
-                  h(i.status) +
+                  h(label(i.status)) +
                   '<p class="muted">' +
                   date(i.periodStart) +
                   ' ~ ' +
@@ -408,19 +411,20 @@ export function createAccount(ui, payments) {
           panel(
             '<h2>' +
               h(p.name) +
+              (state.plan.code === p.code ? ' <span class="badge ok">이용 중</span>' : '') +
               '</h2><p class="balance">' +
               money(p.price) +
-              '</p><p>월 ' +
-              h(p.monthlyCredits) +
-              ' 크레딧 · 일 ' +
+              '</p><p>' +
+              (p.monthlyCredits ? '월 ' + h(p.monthlyCredits) + ' 크레딧' : '구독 크레딧 없음') +
+              ' · 일 ' +
               h(p.dailyGenerationLimit) +
               '회</p><p>우선 대기열 ' +
               (p.priorityQueue ? '제공' : '미제공') +
               ' · 판매 수수료 ' +
               Number(p.sellerFeeRate * 100).toFixed(1) +
               '%</p>' +
-              (p.code === 'FREE'
-                ? '<p class="muted">기본 요금제</p>'
+              (p.code === 'FREE' || state.plan.code === p.code
+                ? '<p class="muted">' + (p.code === 'FREE' ? '기본 요금제' : '현재 이용 중인 요금제') + '</p>'
                 : sub
                   ? ui.action('다음 결제일부터 변경', () =>
                       ui.confirm(
@@ -450,11 +454,12 @@ export function createAccount(ui, payments) {
           '</p>' +
           (sub
             ? '<p>' +
-              h(sub.status) +
-              ' · 다음 결제 ' +
-              date(sub.nextBillingAt) +
+              h(label(sub.status)) +
+              (sub.cancelAtPeriodEnd
+                ? ' · ' + date(sub.currentPeriodEnd) + '에 해지됩니다'
+                : ' · 다음 결제 ' + date(sub.nextBillingAt)) +
               '</p><p>카드 ' +
-              h(sub.card.company) +
+              h(cardCompany(sub.card.company)) +
               ' ' +
               h(sub.card.numberMasked) +
               '</p><p>변경 예약 ' +
@@ -566,7 +571,7 @@ export function createAccount(ui, payments) {
                     ' · ' +
                     money(p.price) +
                     ' · ' +
-                    h(p.status) +
+                    h(label(p.status)) +
                     '</div>' +
                     ui.link('관리', 'product-edit', { id: p.id }) +
                     '</div>',
@@ -608,7 +613,7 @@ export function createAccount(ui, payments) {
                     '<div class="list-row">' +
                     money(r.amount) +
                     ' · ' +
-                    h(r.status) +
+                    h(label(r.status)) +
                     ' · ' +
                     date(r.createdAt) +
                     '</div>',
@@ -635,7 +640,7 @@ export function createAccount(ui, payments) {
                   '<p class="muted">' +
                   date(r.createdAt) +
                   ' ' +
-                  h(r.status) +
+                  h(label(r.status)) +
                   '</p></div><span>' +
                   money(r.amount) +
                   ' ' +

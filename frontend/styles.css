@@ -3,14 +3,17 @@
   color-scheme: light;
   --blue: #235dde;
   --ink: #193251;
-  --muted: #536b89;
+  --muted: #4a617d;
   --line: #dfe9f5;
   background: #f8fbff;
   color: var(--ink);
   font:
-    13px/1.65 'Noto Sans KR',
+    14px/1.65 'Noto Sans KR',
     'Malgun Gothic',
     sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 #emomix-full * {
   box-sizing: border-box;
@@ -81,7 +84,7 @@
   letter-spacing: -1px;
 }
 #emomix-full small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 #emomix-full .brand small {
@@ -151,7 +154,11 @@
 }
 #emomix-full .shell {
   display: grid;
-  grid-template-columns: 155px minmax(0, 1fr);
+  grid-template-columns: 172px minmax(0, 1fr);
+  flex: 1;
+}
+#emomix-full .shell.no-side {
+  grid-template-columns: minmax(0, 1fr);
 }
 #emomix-full aside {
   padding: 20px 10px 25px 14px;
@@ -159,8 +166,8 @@
   border-right: 1px solid var(--line);
 }
 #emomix-full aside > p {
-  font-size: 10px;
-  color: #647b97;
+  font-size: 12px;
+  color: #536b89;
   margin: 6px 10px 8px;
 }
 #emomix-full aside > p:not(:first-child) {
@@ -173,7 +180,7 @@
   width: 100%;
   text-align: left;
   padding: 8px 10px;
-  font-size: 12px;
+  font-size: 13px;
 }
 #emomix-full .side-note {
   margin: 30px 10px 0;
@@ -183,8 +190,16 @@
 }
 #emomix-full main {
   min-width: 0;
-  padding: 24px;
+  padding: 24px clamp(16px, 3vw, 40px);
   min-height: 510px;
+}
+#emomix-full main > * {
+  max-width: 1080px;
+  margin-left: auto;
+  margin-right: auto;
+}
+#emomix-full .no-side main > .auth-panel {
+  max-width: 460px;
 }
 #emomix-full :is(h1, h2, h3, p) {
   margin: 0;
@@ -284,7 +299,7 @@
 }
 #emomix-full label {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
 }
 #emomix-full label:has(input[type='checkbox']) {
@@ -512,13 +527,28 @@
 }
 #emomix-full footer {
   display: flex;
-  gap: 12px;
+  gap: 8px 16px;
   flex-wrap: wrap;
-  padding: 15px 22px;
+  align-items: center;
+  padding: 16px 24px;
   border-top: 1px solid var(--line);
   background: #fff;
-  color: #5b7491;
-  font-size: 10px;
+  color: #4a617d;
+  font-size: 12px;
+}
+#emomix-full footer .foot-links {
+  display: flex;
+  gap: 4px;
+}
+#emomix-full footer .foot-links button {
+  min-height: 0;
+  padding: 2px 6px;
+  background: none;
+  color: #315b94;
+  text-decoration: underline;
+}
+#emomix-full footer .copy {
+  margin-left: auto;
 }
 #emomix-full .thumbs {
   display: grid;
@@ -701,4 +731,189 @@ body {
   color: #235dde;
   background: #edf4ff;
   text-decoration: none;
+}
+
+/* ---- UX 개선: 헤더 계정 영역 ---- */
+#emomix-full .account .bell {
+  position: relative;
+}
+#emomix-full .unread {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
+#emomix-full .account .credit {
+  border-radius: 16px;
+  padding: 6px 12px;
+}
+#emomix-full .account .who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+#emomix-full .who .avatar {
+  overflow: hidden;
+}
+#emomix-full .who .avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+#emomix-full .who-name {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- 페이지 머리말, 검색줄, 배지 ---- */
+#emomix-full .page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+#emomix-full .toolbar {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-width: 240px;
+  max-width: 520px;
+}
+#emomix-full .toolbar input {
+  flex: 1;
+}
+#emomix-full .toolbar select {
+  width: auto;
+}
+#emomix-full .wrap {
+  flex-wrap: wrap;
+}
+#emomix-full .badge {
+  display: inline-block;
+  align-self: start;
+  padding: 2px 9px;
+  border-radius: 12px;
+  background: #edf4ff;
+  color: #235dde;
+  font-size: 12px;
+  font-weight: 600;
+}
+#emomix-full .badge.ok {
+  background: #e3f6ea;
+  color: #1c6b3c;
+}
+#emomix-full .pager {
+  justify-content: center;
+}
+
+/* ---- 카드 전체가 눌리는 목록 타일 ---- */
+#emomix-full button.tile {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  width: 100%;
+  height: auto;
+  padding: 10px;
+  border: 1px solid #e3ecf8;
+  background: #fff;
+  text-align: left;
+  font-weight: 400;
+  transition:
+    transform 0.12s,
+    box-shadow 0.12s;
+}
+#emomix-full button.tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(35, 93, 222, 0.12);
+  background: #fff;
+}
+#emomix-full .tile .art {
+  display: grid;
+  min-height: 150px;
+}
+#emomix-full .tile .art .live-image {
+  max-width: 100%;
+  max-height: 150px;
+  margin: auto;
+}
+#emomix-full .tile-title {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#emomix-full .tile .muted {
+  font-size: 12px;
+}
+
+/* ---- 소셜 로그인 ---- */
+#emomix-full .divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 12px;
+  color: #536b89;
+  font-size: 12px;
+}
+#emomix-full .divider::before,
+#emomix-full .divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+#emomix-full .btn-discord {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  border-radius: 9px;
+  background: #5865f2;
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.12s;
+}
+#emomix-full .btn-discord:hover {
+  background: #4752c4;
+}
+#emomix-full .btn-discord:focus-visible {
+  outline: 3px solid #a5adff;
+  outline-offset: 2px;
+}
+
+@media (max-width: 520px) {
+  #emomix-full .who-name,
+  #emomix-full footer .copy {
+    display: none;
+  }
+  #emomix-full .toolbar {
+    max-width: none;
+    min-width: 100%;
+  }
+}
+#emomix-full .toolbar input[type='search'] {
+  flex: 1;
+  width: auto;
+}
+#emomix-full .toolbar select[name] {
+  flex: none;
+  width: auto;
+  min-width: 120px;
+}
+#emomix-full .toolbar button {
+  white-space: nowrap;
 }

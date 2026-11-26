@@ -21,27 +21,33 @@
           ><button data-go="market">마켓</button>
         </nav>
         <div class="account">
-          <button data-go="notifications" aria-label="알림">
-            <i data-lucide="bell" aria-hidden="true"></i></button
+          <button data-go="notifications" aria-label="알림" class="bell" data-need="user" hidden>
+            <i data-lucide="bell" aria-hidden="true"></i
+            ><span class="unread" data-account="unread" hidden></span></button
+          ><button class="credit" data-go="wallet" data-account="credit" aria-label="지갑·크레딧 충전" hidden></button
+          ><button class="who" data-go="profile" data-account="who" aria-label="내 정보·설정" hidden>
+            <span class="avatar" aria-hidden="true"></span><span class="who-name"></span></button
           ><button data-auth-tab="로그인">로그인</button
           ><button data-auth-tab="회원가입" class="primary">회원가입</button>
         </div>
       </header>
       <div class="shell">
-        <aside>
+        <aside hidden>
           <p>내 작업 공간</p>
-          <button data-go="library">
+          <button data-go="library" data-need="user">
             <i data-lucide="folder-heart" aria-hidden="true"></i>내 보관함</button
-          ><button data-go="jobs">
+          ><button data-go="jobs" data-need="user">
             <i data-lucide="clock-3" aria-hidden="true"></i>생성 내역</button
-          ><button data-go="orders">
+          ><button data-go="wallet" data-need="user">
+            <i data-lucide="wallet" aria-hidden="true"></i>지갑·충전</button
+          ><button data-go="orders" data-need="user">
             <i data-lucide="shopping-bag" aria-hidden="true"></i>구매·후원
           </button>
           <p>계정과 운영</p>
-          <button data-go="subscription">구독 관리</button
-          ><button data-go="profile">내 정보·설정</button
-          ><button data-go="creator">창작자 센터</button
-          ><button data-go="admin">관리자</button>
+          <button data-go="subscription" data-need="user">구독 관리</button
+          ><button data-go="profile" data-need="user">내 정보·설정</button
+          ><button data-go="creator" data-need="user">창작자 센터</button
+          ><button data-go="admin" data-need="admin" hidden>관리자</button>
         </aside>
         <main id="mix-content" aria-label="EmoMix 화면"></main>
       </div>
@@ -62,7 +68,10 @@
         </div>
       </section>
       <footer>
-        EmoMix <span>by AIMIX</span><span>이용약관 · 개인정보 처리방침</span>
+        <b>EmoMix</b><span>by AIMIX</span>
+        <div class="foot-links"><button data-go="terms">이용약관</button
+        ><button data-go="terms">개인정보 처리방침</button></div>
+        <span class="copy">© 2026 AIMIX. 인공지능융합플랫폼 팀 프로젝트</span>
       </footer>
     </div>
   </body>
