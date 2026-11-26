@@ -71,7 +71,12 @@ export class WorkerController {
         jobId: job.id, type: job.type, prompt: w.prompt,
         inputImageUrls: await Promise.all(w.inputImageKeys.map((k) => this.storage.getUrl(k, 900))),
         maskImageUrl: await this.storage.getUrl(w.maskKey, 900),
-        params: { count: w.count, items: w.items ?? [] },
+        params: {
+          count: w.count, items: w.items ?? [],
+          seed: w.seed ?? null, negativePrompt: w.negativePrompt ?? '',
+          // 이미지 i 번째는 seeds[i] 를 쓰면 같은 시드로 같은 결과를 다시 만들 수 있다
+          seeds: w.seed === undefined ? [] : Array.from({ length: Math.max(w.count, 1) }, (_, i) => (w.seed as number) + i),
+        },
         leaseExpiresAt: lease,
       },
     };
