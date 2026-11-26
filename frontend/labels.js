@@ -43,6 +43,10 @@ const LABELS = {
   REJECTED: '반려됨',
   SUSPENDED: '정지됨',
   ON_SALE: '판매 중',
+  // 캐릭터·세트
+  DRAFT: '작성 중',
+  CONFIRMED: '확정됨',
+  PUBLISHED: '공유·판매 중',
 };
 
 // 토스페이먼츠 카드사 코드
