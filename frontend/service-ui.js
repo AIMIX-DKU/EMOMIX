@@ -18,11 +18,12 @@ export const money = (value) =>
 export const date = (value) =>
   value ? new Date(value).toLocaleString('ko-KR') : '—';
 export function picture(url, label = '') {
-  if (!url) return '<div class="empty">이미지 준비 중</div>';
+  if (!url)
+    return '<div class="img-empty"><span aria-hidden="true">🖼</span><small>아직 이미지가 없어요</small></div>';
   const parsed = new URL(url, location.origin);
   if (!['http:', 'https:', 'blob:'].includes(parsed.protocol)) return '';
   return (
-    '<img class="live-image" src="' +
+    '<img class="live-image is-loading" loading="lazy" decoding="async" src="' +
     h(parsed.href) +
     '" alt="' +
     h(label) +
@@ -184,11 +185,10 @@ export function createUI(root, go, notify) {
   const link = (label, page, params = {}) =>
     action(label, () => go(page, params));
   // 카드 전체가 눌리는 목록 카드. art 는 이미 만들어진 HTML, 나머지는 텍스트.
-  const tile = (page, params, { art, title, meta = '', badge = '' }) =>
+  const tileDo = (handler, { art, title, meta = '', badge = '' }) =>
     '<button type="button" class="tile" data-do="' +
-    key(() => go(page, params)) +
-    '">' +
-    '<span class="art">' +
+    key(handler) +
+    '"><span class="art">' +
     art +
     '</span>' +
     (badge ? '<span class="badge">' + h(badge) + '</span>' : '') +
@@ -197,6 +197,7 @@ export function createUI(root, go, notify) {
     '</strong>' +
     (meta ? '<span class="muted">' + meta + '</span>' : '') +
     '</button>';
+  const tile = (page, params, spec) => tileDo(() => go(page, params), spec);
   // 한 줄 검색창 (선택 입력 select 포함)
   const searchForm = (handler, { name = 'keyword', placeholder, value = '', extra = '' }) =>
     '<form class="toolbar" role="search" data-send="' +
@@ -322,7 +323,7 @@ export function createUI(root, go, notify) {
     try {
       await handlers.get(button.dataset.do)?.();
     } catch (error) {
-      notify(error.message);
+      notify(error.message, 'error');
     } finally {
       button.disabled = false;
     }
@@ -338,7 +339,7 @@ export function createUI(root, go, notify) {
     try {
       await handlers.get(target.dataset.send)?.(formValues(target), target);
     } catch (error) {
-      notify(error.message);
+      notify(error.message, 'error');
     } finally {
       delete target.dataset.busy;
       submit.disabled = false;
@@ -366,6 +367,7 @@ export function createUI(root, go, notify) {
     action,
     link,
     tile,
+    tileDo,
     searchForm,
     segments,
     form,
