@@ -4605,11 +4605,17 @@ paths:
                                   type: string
                                   format: uri
                                   description: 이미지 URL
+                                thumbnailUrl:
+                                  type: string
+                                  format: uri
+                                  description: 목록용 작은 이미지 URL(없으면 원본과 같음)
+                                  nullable: true
                               required:
                               - id
                               - imageUrl
+                              - thumbnailUrl
                             description: 생성된 이미지 목록
-                        description: 결과 (SUCCEEDED일 때만, 그 외 null)
+                        description: 결과 (결과 이미지가 하나라도 있으면 채워진다. SUCCEEDED 이거나, RUNNING 중 일부 결과가 먼저 전달됐을 때. 그 외 null)
                         nullable: true
                         required:
                         - images
@@ -4664,6 +4670,7 @@ paths:
                     images:
                     - id: img-001
                       imageUrl: https://cdn.emomix.example/img/001.png
+                      thumbnailUrl: https://cdn.emomix.example/img/001.png
                   errorCode: null
                   createdAt: '2026-11-17T12:00:00Z'
                   startedAt: null
@@ -5297,11 +5304,17 @@ paths:
                                         type: string
                                         format: uri
                                         description: 이미지 URL
+                                      thumbnailUrl:
+                                        type: string
+                                        format: uri
+                                        description: 목록용 작은 이미지 URL(없으면 원본과 같음)
+                                        nullable: true
                                     required:
                                     - id
                                     - imageUrl
+                                    - thumbnailUrl
                                   description: 생성된 이미지 목록
-                              description: 결과 (SUCCEEDED일 때만, 그 외 null)
+                              description: 결과 (결과 이미지가 하나라도 있으면 채워진다. SUCCEEDED 이거나, RUNNING 중 일부 결과가 먼저 전달됐을 때. 그 외 null)
                               nullable: true
                               required:
                               - images
@@ -5376,6 +5389,7 @@ paths:
                       images:
                       - id: img-001
                         imageUrl: https://cdn.emomix.example/img/001.png
+                        thumbnailUrl: https://cdn.emomix.example/img/001.png
                     errorCode: null
                     createdAt: '2026-11-17T12:00:00Z'
                     startedAt: null
@@ -5503,11 +5517,17 @@ paths:
                                   type: string
                                   format: uri
                                   description: 이미지 URL
+                                thumbnailUrl:
+                                  type: string
+                                  format: uri
+                                  description: 목록용 작은 이미지 URL(없으면 원본과 같음)
+                                  nullable: true
                               required:
                               - id
                               - imageUrl
+                              - thumbnailUrl
                             description: 생성된 이미지 목록
-                        description: 결과 (SUCCEEDED일 때만, 그 외 null)
+                        description: 결과 (결과 이미지가 하나라도 있으면 채워진다. SUCCEEDED 이거나, RUNNING 중 일부 결과가 먼저 전달됐을 때. 그 외 null)
                         nullable: true
                         required:
                         - images
@@ -5562,6 +5582,7 @@ paths:
                     images:
                     - id: img-001
                       imageUrl: https://cdn.emomix.example/img/001.png
+                      thumbnailUrl: https://cdn.emomix.example/img/001.png
                   errorCode: null
                   createdAt: '2026-11-17T12:00:00Z'
                   startedAt: null
@@ -6630,11 +6651,17 @@ paths:
                                   type: string
                                   format: uri
                                   description: 이미지 URL
+                                thumbnailUrl:
+                                  type: string
+                                  format: uri
+                                  description: 목록용 작은 이미지 URL(없으면 원본과 같음)
+                                  nullable: true
                               required:
                               - id
                               - imageUrl
+                              - thumbnailUrl
                             description: 생성된 이미지 목록
-                        description: 결과 (SUCCEEDED일 때만, 그 외 null)
+                        description: 결과 (결과 이미지가 하나라도 있으면 채워진다. SUCCEEDED 이거나, RUNNING 중 일부 결과가 먼저 전달됐을 때. 그 외 null)
                         nullable: true
                         required:
                         - images
@@ -6689,6 +6716,7 @@ paths:
                     images:
                     - id: img-001
                       imageUrl: https://cdn.emomix.example/img/001.png
+                      thumbnailUrl: https://cdn.emomix.example/img/001.png
                   errorCode: null
                   createdAt: '2026-11-17T12:00:00Z'
                   startedAt: null
@@ -7315,11 +7343,17 @@ paths:
                                   type: string
                                   format: uri
                                   description: 이미지 URL
+                                thumbnailUrl:
+                                  type: string
+                                  format: uri
+                                  description: 목록용 작은 이미지 URL(없으면 원본과 같음)
+                                  nullable: true
                               required:
                               - id
                               - imageUrl
+                              - thumbnailUrl
                             description: 생성된 이미지 목록
-                        description: 결과 (SUCCEEDED일 때만, 그 외 null)
+                        description: 결과 (결과 이미지가 하나라도 있으면 채워진다. SUCCEEDED 이거나, RUNNING 중 일부 결과가 먼저 전달됐을 때. 그 외 null)
                         nullable: true
                         required:
                         - images
@@ -7374,6 +7408,7 @@ paths:
                     images:
                     - id: img-001
                       imageUrl: https://cdn.emomix.example/img/001.png
+                      thumbnailUrl: https://cdn.emomix.example/img/001.png
                   errorCode: null
                   createdAt: '2026-11-17T12:00:00Z'
                   startedAt: null
@@ -7614,11 +7649,17 @@ paths:
                                   type: string
                                   format: uri
                                   description: 이미지 URL
+                                thumbnailUrl:
+                                  type: string
+                                  format: uri
+                                  description: 목록용 작은 이미지 URL(없으면 원본과 같음)
+                                  nullable: true
                               required:
                               - id
                               - imageUrl
+                              - thumbnailUrl
                             description: 생성된 이미지 목록
-                        description: 결과 (SUCCEEDED일 때만, 그 외 null)
+                        description: 결과 (결과 이미지가 하나라도 있으면 채워진다. SUCCEEDED 이거나, RUNNING 중 일부 결과가 먼저 전달됐을 때. 그 외 null)
                         nullable: true
                         required:
                         - images
@@ -7673,6 +7714,7 @@ paths:
                     images:
                     - id: img-001
                       imageUrl: https://cdn.emomix.example/img/001.png
+                      thumbnailUrl: https://cdn.emomix.example/img/001.png
                   errorCode: null
                   createdAt: '2026-11-17T12:00:00Z'
                   startedAt: null
@@ -18986,12 +19028,158 @@ paths:
                     message: 작업 임대가 만료되었거나 다른 워커에 배정되었습니다.
                     data: null
                     errorCode: LEASE_EXPIRED
+  /worker/jobs/{jobId}/partial:
+    post:
+      tags:
+      - Worker
+      summary: 일부 결과 먼저 전달
+      operationId: op134
+      description: 이미지가 한 장씩 만들어질 때마다 호출하면 사용자 화면에 완성된 순서대로 나타난다. 작업은 RUNNING 으로 유지되고 임대가 연장된다(heartbeat 역할 겸함). 캐릭터 후보와 감정 세트 생성에만 쓴다(재생성·인페인트는 결과가 1장이라 complete 만 사용). 마지막에는 반드시 /complete 를 호출한다. partial 로 전달한 이미지는 다시 보내지 않고, 남은 이미지만 complete 의 images 에 담는다(전부 partial 로 보냈다면 images 는 빈 배열). 썸네일(최대 384px)은 서버가 자동으로 만든다. 일부만 전달하고 /fail 을 호출하거나 임대가 끝나 실패하면 전달된 장수만큼만 크레딧을 확정하고 나머지는 반환한다.
+      parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 리소스 ID
+      security:
+      - workerKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                images:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      uploadKey:
+                        type: string
+                        description: 발급받은 키
+                      label:
+                        type: string
+                        description: 감정/상황 키(EMOTION_SET일 때)
+                    required:
+                    - uploadKey
+                  description: 지금까지 만든 결과 이미지(1~32장)
+                progress:
+                  type: integer
+                  description: 진행률 0~100(보내면 갱신)
+                workerId:
+                  type: string
+                  description: claim 때 보낸 워커 식별자. 보내면 임대한 워커와 같은지 검사
+              required:
+              - images
+            example:
+              images:
+              - uploadKey: k-001
+                label: thanks
+              progress: 60
+              workerId: id-001
+      responses:
+        '200':
+          description: 일부 결과가 전달되었습니다.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - success
+                - message
+                - data
+                - errorCode
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      jobId:
+                        type: string
+                        description: 작업 ID
+                      delivered:
+                        type: integer
+                        description: 지금까지 전달된 결과 이미지 수
+                    required:
+                    - jobId
+                    - delivered
+                  errorCode:
+                    type: string
+                    nullable: true
+              example:
+                success: true
+                message: 일부 결과가 전달되었습니다.
+                data:
+                  jobId: id-001
+                  delivered: 1
+                errorCode: null
+        '400':
+          description: 'VALIDATION_ERROR: CHARACTER_CANDIDATES·EMOTION_SET 이 아닌 작업이거나 업로드되지 않은 파일'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              examples:
+                VALIDATION_ERROR:
+                  summary: CHARACTER_CANDIDATES·EMOTION_SET 이 아닌 작업이거나 업로드되지 않은 파일
+                  value:
+                    success: false
+                    message: 요청 값이 올바르지 않습니다.
+                    data: null
+                    errorCode: VALIDATION_ERROR
+        '401':
+          description: 'UNAUTHORIZED: X-Worker-Key 없음/불일치'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              examples:
+                UNAUTHORIZED:
+                  summary: X-Worker-Key 없음/불일치
+                  value:
+                    success: false
+                    message: 로그인이 필요합니다.
+                    data: null
+                    errorCode: UNAUTHORIZED
+        '404':
+          description: 'NOT_FOUND: 대상 없음'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              examples:
+                NOT_FOUND:
+                  summary: 대상 없음
+                  value:
+                    success: false
+                    message: 존재하지 않는 리소스입니다.
+                    data: null
+                    errorCode: NOT_FOUND
+        '409':
+          description: 'LEASE_EXPIRED: 작업 임대가 만료됐거나 다른 워커에 배정됨'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              examples:
+                LEASE_EXPIRED:
+                  summary: 작업 임대가 만료됐거나 다른 워커에 배정됨
+                  value:
+                    success: false
+                    message: 작업 임대가 만료되었거나 다른 워커에 배정되었습니다.
+                    data: null
+                    errorCode: LEASE_EXPIRED
   /worker/jobs/{jobId}/complete:
     post:
       tags:
       - Worker
       summary: 작업 완료 보고
-      operationId: op134
+      operationId: op135
       description: 서버가 파일을 검수한 뒤 이모티콘/후보 이미지로 연결하고 크레딧을 확정(CONSUME)한다. 요청한 장수보다 적게 돌아오면 돌아온 장수만큼만 확정하고 나머지 예약분은 반환한다.
       parameters:
       - name: jobId
@@ -19022,7 +19210,7 @@ paths:
                         description: 감정/상황 키(EMOTION_SET일 때)
                     required:
                     - uploadKey
-                  description: 결과 이미지
+                  description: 남은 결과 이미지(/partial 로 이미 전달한 이미지는 제외. 전부 partial 로 보냈다면 빈 배열 가능)
                 workerId:
                   type: string
                   description: claim 때 보낸 워커 식별자. 보내면 임대한 워커와 같은지 검사(임대가 만료돼 다른 워커에게 넘어간 작업을 이전 워커가 건드리지 못하게)
@@ -19133,7 +19321,7 @@ paths:
       tags:
       - Worker
       summary: 작업 실패 보고
-      operationId: op135
+      operationId: op136
       description: 크레딧을 반환(RELEASE)한다. reason=CANCELED는 사용자 취소에 따른 중단이라 상태가 CANCELED가 된다.
       parameters:
       - name: jobId
@@ -19271,7 +19459,7 @@ paths:
       tags:
       - Subscription
       summary: 구독 요금제 조회
-      operationId: op136
+      operationId: op137
       description: '무료 요금제는 가입 체험 크레딧(20)만 주고 월 지급은 없다. 구독 크레딧은 이월하지 않는다: 구독 기간이 끝나면(해지·갱신 시점) 남은 구독 크레딧은 소멸하고, 갱신에 성공하면 월 크레딧이 새로 지급된다. 요금제 값은 서버 설정이며 응답이 기준이다.'
       security: []
       responses:
@@ -19356,7 +19544,7 @@ paths:
       tags:
       - Subscription
       summary: 내 구독 조회
-      operationId: op137
+      operationId: op138
       description: 결제수단 등록 화면(토스 SDK requestBillingAuth)을 열 때 customerKey 를 이 응답에서 가져와 쓴다. PAST_DUE 중에는 혜택이 유지된다(유예).
       security:
       - cookieAuth: []
@@ -19539,7 +19727,7 @@ paths:
       tags:
       - Subscription
       summary: 구독 요금제 변경 예약
-      operationId: op139
+      operationId: op140
       description: 변경은 다음 결제일부터 적용된다(업/다운그레이드 모두). 이번 기간의 혜택과 이미 낸 금액은 그대로 유지되고 차액 정산은 없다. 같은 요금제로 되돌리면 예약이 취소된다.
       security:
       - cookieAuth: []
@@ -19722,7 +19910,7 @@ paths:
       tags:
       - Subscription
       summary: 구독 해지
-      operationId: op140
+      operationId: op141
       description: 해지하면 자동결제가 멈추고 구독 기간이 끝날 때까지 혜택(남은 구독 크레딧 포함)은 유지된다. 기간이 끝나면 status 가 CANCELED 가 되고 남은 구독 크레딧은 소멸하며 FREE 요금제로 돌아간다. 결제한 금액은 환불하지 않는다. 이미 해지 예약 상태면 그대로 성공한다.
       security:
       - cookieAuth: []
@@ -19875,7 +20063,7 @@ paths:
       tags:
       - Subscription
       summary: 구독 시작
-      operationId: op138
+      operationId: op139
       description: 서버가 authKey 로 billingKey 를 발급받아 저장하고(카드번호는 저장하지 않는다) 첫 달을 즉시 청구한다. 성공하면 구독 기간(오늘 ~ 한 달 뒤)이 시작되고 월 크레딧이 지급된다. 결제 내역은 구독 결제 내역과 주문(type=SUBSCRIPTION)에 남는다.
       parameters:
       - name: Idempotency-Key
@@ -20102,7 +20290,7 @@ paths:
       tags:
       - Subscription
       summary: 구독 해지 취소
-      operationId: op141
+      operationId: op142
       description: 구독 기간이 끝나기 전에만 해지 예약을 취소할 수 있다.
       security:
       - cookieAuth: []
@@ -20269,7 +20457,7 @@ paths:
       tags:
       - Subscription
       summary: 결제 카드 변경
-      operationId: op142
+      operationId: op143
       description: 새 billingKey 로 교체하고 이전 billingKey 는 폐기한다. 결제 실패로 PAST_DUE 인 경우 카드 변경 직후 바로 미납분을 다시 청구한다.
       security:
       - cookieAuth: []
@@ -20469,7 +20657,7 @@ paths:
       tags:
       - Subscription
       summary: 구독 결제 내역 조회
-      operationId: op143
+      operationId: op144
       parameters:
       - name: page
         in: query
@@ -20639,7 +20827,7 @@ paths:
       tags:
       - Subscription
       summary: 정기결제 실행(크론)
-      operationId: op144
+      operationId: op145
       description: '사용자 API 가 아니라 Vercel Cron 이 하루 한 번(한국 시간 00:10) 호출한다. Vercel 이 CRON_SECRET 환경변수 값을 Authorization: Bearer 로 붙이며 틀리면 401. 결제일이 지난 ACTIVE 구독을 청구해 성공하면 기간을 한 달 연장하고 월 크레딧을 새로 지급한다(남은 구독 크레딧은 소멸, 이월 없음). 실패하면 PAST_DUE 로 바꾸고 다음 날부터 하루 간격으로 최대 3회 재시도하며, 모두 실패하면 CANCELED(FREE 로 복귀). 해지 예약된 구독은 기간 끝에 CANCELED 로 바꾼다. 같은 결제일을 두 번 청구하지 않도록 결제일당 한 번만 처리하며 여러 번 호출해도 결과가 같다.'
       security:
       - cronSecret: []

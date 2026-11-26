@@ -62,3 +62,7 @@ export async function watermarkPreview(src: Buffer): Promise<Buffer> {
   const base = await sharp(src).resize(256, 256, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } }).png().toBuffer();
   return sharp(base).composite([{ input: svg }]).png().toBuffer();
 }
+
+/** 목록용 작은 이미지(최대 384px, WebP). */
+export const makeThumb = (src: Buffer) =>
+  sharp(src).rotate().resize(384, 384, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();

@@ -178,6 +178,49 @@ describe('캐릭터·생성·워커·지갑·다운로드', () => {
     expect((await c.get('/sets')).body.data.totalElements).toBe(0);
   });
 
+  it('일부 결과 먼저 전달: 진행 중에도 결과가 보이고, 마지막 complete 에서 합산 과금', async () => {
+    const { c } = await signedUp(app, ctx.mail);
+    const ch = (await c.post('/characters', { name: '곰', description: '갈색 곰', stylePreset: 'pastel' })).body.data.id;
+    const jobId = (await idem(c, `/characters/${ch}/candidates`, { count: 3 })).body.data.jobId;
+    expect(await balance(c)).toEqual({ balance: 17, reserved: 3 });
+    await w.claimJob(jobId);
+
+    // 1장 먼저
+    const p1 = await w.partial(jobId, 1);
+    expect(p1.status).toBe(200);
+    expect(p1.body.data).toMatchObject({ delivered: 1 });
+    const mid = (await c.get(`/generations/${jobId}`)).body.data;
+    expect(mid.status).toBe('RUNNING');
+    expect(mid.result.images).toHaveLength(1);
+    expect(mid.result.images[0].imageUrl).toMatch(/^https?:/);
+    expect(mid.result.images[0].thumbnailUrl).toMatch(/^https?:/);
+    expect((await c.get(`/characters/${ch}/candidates`)).body.data.items).toHaveLength(1);
+
+    // 나머지 2장은 complete 로 마무리하면 총 3장
+    expect((await w.finish(jobId, 2)).status).toBe(200);
+    const done = (await c.get(`/generations/${jobId}`)).body.data;
+    expect(done.status).toBe('SUCCEEDED');
+    expect(done.result.images).toHaveLength(3);
+    expect((await c.get(`/characters/${ch}/candidates`)).body.data.items).toHaveLength(3);
+    expect(await balance(c)).toEqual({ balance: 17, reserved: 0 });
+
+    // 끝난 작업에는 더 보낼 수 없다
+    expect((await w.call(`/${jobId}/partial`, { images: [{ uploadKey: `generated/${jobId}/x.png` }] })).body.errorCode).toBe('LEASE_EXPIRED');
+  });
+
+  it('일부 결과만 보내고 실패하면 전달된 만큼만 과금하고 나머지는 반환', async () => {
+    const { c } = await signedUp(app, ctx.mail);
+    const ch = (await c.post('/characters', { name: '곰', description: '갈색 곰', stylePreset: 'pastel' })).body.data.id;
+    const jobId = (await idem(c, `/characters/${ch}/candidates`, { count: 3 })).body.data.jobId;
+    await w.claimJob(jobId);
+    await w.partial(jobId, 1);
+    expect((await w.call(`/${jobId}/fail`, { reason: 'GPU_ERROR' })).status).toBe(200);
+    expect(await balance(c)).toEqual({ balance: 19, reserved: 0 }); // 20 - 1장분
+    const job = (await c.get(`/generations/${jobId}`)).body.data;
+    expect(job.status).toBe('FAILED');
+    expect(job.result.images).toHaveLength(1);
+  });
+
   it('실패 보고는 크레딧을 반환하고 이모티콘을 FAILED 로, 대기 중 작업은 취소하면 즉시 반환', async () => {
     const { c } = await signedUp(app, ctx.mail);
     const ch = (await c.post('/characters', { name: '펭귄', description: '검정 펭귄', stylePreset: 'pixel' })).body.data.id;
