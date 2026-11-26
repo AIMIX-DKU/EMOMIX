@@ -1,11 +1,14 @@
 import { api } from './api.js';
+import { label } from './labels.js';
 import {
   h,
   id,
   picture,
   heading,
+  pageHead,
   panel,
   field,
+  empty,
   money,
   date,
   allItems,
@@ -41,51 +44,66 @@ export function createMarket(ui, payments) {
     const search = new URLSearchParams();
     if (params.keyword) search.set('keyword', params.keyword);
     if (params.type) search.set('type', params.type);
+    if (params.sort) search.set('sort', params.sort);
+    const sorts = [
+      ['LATEST', '최신순'],
+      ['POPULAR', '인기순'],
+      ['PRICE_ASC', '낮은 가격순'],
+      ['PRICE_DESC', '높은 가격순'],
+    ];
     return (
-      heading('마켓', '작품과 제작 템플릿을 만나보세요.') +
-      panel(
-        ui.form(
-          field('keyword', '검색', 'text', params.keyword, { optional: true }) +
-            field(
-              'type',
-              '종류',
-              [
-                ['', '전체'],
-                ['EMOTICON_SET', '이모티콘 세트'],
-                ['PROMPT_TEMPLATE', '프롬프트 템플릿'],
-                ['RECIPE_BUNDLE', '제작 레시피'],
-              ],
-              params.type,
-              { optional: true },
-            ),
-          (data) => ui.go('market', data),
-          '검색',
-        ),
+      pageHead('마켓', '작품과 제작 템플릿을 만나보세요.') +
+      ui.segments(
+        [
+          ['', '전체'],
+          ['EMOTICON_SET', '이모티콘 세트'],
+          ['PROMPT_TEMPLATE', '프롬프트 템플릿'],
+          ['RECIPE_BUNDLE', '제작 레시피'],
+        ],
+        params.type,
+        (type) => ui.go('market', { ...params, type, page: 0 }),
       ) +
+      ui.searchForm((data) => ui.go('market', { ...params, ...data, page: 0 }), {
+        placeholder: '상품 검색',
+        value: params.keyword || '',
+        extra:
+          '<select name="sort" aria-label="정렬">' +
+          sorts
+            .map(
+              ([v, t]) =>
+                '<option value="' +
+                v +
+                '"' +
+                ((params.sort || 'LATEST') === v ? ' selected' : '') +
+                '>' +
+                t +
+                '</option>',
+            )
+            .join('') +
+          '</select>',
+      }) +
+      '<div class="space"></div>' +
       (await ui.paginate(
         '/products?' + search,
         (items) =>
           '<div class="grid">' +
           items
-            .map(
-              (p) =>
-                '<article class="tile"><div class="art">' +
-                picture(p.thumbnailUrl, p.title) +
-                '</div><h3>' +
-                h(p.title) +
-                '</h3><p>' +
-                money(p.price) +
-                '</p><p class="muted">' +
-                h(p.seller.nickname) +
-                ' · 후기 ' +
-                h(p.reviewCount) +
-                '</p>' +
-                ui.link('상품 보기', 'product', { id: p.id }) +
-                '</article>',
+            .map((p) =>
+              ui.tile(
+                'product',
+                { id: p.id },
+                {
+                  art: picture(p.thumbnailUrl, p.title),
+                  title: p.title,
+                  badge: money(p.price),
+                  meta: h(p.seller.nickname) + ' · 후기 ' + h(p.reviewCount),
+                },
+              ),
             )
             .join('') +
           '</div>',
         { ...params, route: 'market' },
+        { empty: empty('아직 등록된 상품이 없어요. 작품이 올라오면 여기에 표시돼요.') },
       ))
     );
   }
@@ -404,7 +422,7 @@ export function createMarket(ui, payments) {
                   '</strong><p class="muted">' +
                   date(o.createdAt) +
                   ' · ' +
-                  h(o.status || '후원 완료') +
+                  h(label(o.status) || '후원 완료') +
                   '</p><p>' +
                   h(o.message) +
                   '</p></div><div>' +
@@ -430,7 +448,7 @@ export function createMarket(ui, payments) {
           '</h2><p>' +
           h(o.orderNo) +
           '</p><p>' +
-          h(o.status) +
+          h(label(o.status)) +
           ' · ' +
           money(o.amount) +
           '</p><p class="muted">주문 유효기간 ' +
