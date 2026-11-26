@@ -1182,3 +1182,45 @@ body {
     gap: 6px;
   }
 }
+
+/* ---- 이모티콘 만들기: 표정/상황/직접 입력 ---- */
+#emomix-full .chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+#emomix-full label.chip-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid #c6d7ec;
+  border-radius: 20px;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 500;
+}
+#emomix-full label.chip-check:has(input:checked) {
+  border-color: var(--blue);
+  background: #e5efff;
+  color: var(--blue);
+}
+#emomix-full .custom-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+#emomix-full .custom-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 8px;
+}
+#emomix-full .pick-summary {
+  font-weight: 500;
+  color: var(--ink);
+}
+@media (max-width: 520px) {
+  #emomix-full .custom-row {
+    grid-template-columns: 1fr;
+  }
+}

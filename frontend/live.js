@@ -242,7 +242,7 @@ export function createLiveApp({ root, navigate, notify }) {
           ).join('') +
           '</div>' +
           (candidates.length
-            ? '<div class="row">' +
+            ? '<p class="muted">마음에 드는 후보를 고르고 확정하면, 이 캐릭터로 여러 표정·상황·행동의 이모티콘 세트를 만들 수 있어요.</p><div class="row">' +
               button('이 캐릭터 확정', 'confirm', true) +
               button('PNG 다운로드', 'download') +
               button('건너뛰기', 'skip') +
@@ -729,8 +729,8 @@ export function createLiveApp({ root, navigate, notify }) {
         '/characters/' + encodeURIComponent(character.id) + '/confirm',
         { method: 'POST', body: { candidateImageId: item.imageId } },
       );
-      navigate('library');
-      notify('기준 캐릭터를 확정했어요.');
+      navigate('set-new', { characterId: character.id });
+      notify('기준 캐릭터를 확정했어요. 이제 이 캐릭터로 만들 표정과 행동을 골라 보세요.');
       return;
     }
     if (name.startsWith('character-')) {

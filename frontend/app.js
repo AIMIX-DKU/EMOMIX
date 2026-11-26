@@ -79,6 +79,7 @@ const live = createLiveApp({
   root,
   navigate(page, keep) {
     if (typeof keep === 'string') return go(page, { tab: keep });
+    if (keep && typeof keep === 'object') return go(page, keep);
     return go(page, keep && page === route ? params : {});
   },
   notify,

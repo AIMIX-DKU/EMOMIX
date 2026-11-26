@@ -211,7 +211,14 @@ export function createWorkshop(ui) {
             chars.items.map((c) => [c.id, c.name]),
             params.characterId,
           ) +
-            field('title', '세트 이름', 'text', '', { maxlength: 50 }) +
+            field(
+              'title',
+              '세트 이름',
+              'text',
+              (chars.items.find((c) => c.id === params.characterId)?.name || '') +
+                (params.characterId ? ' 이모티콘 세트' : ''),
+              { maxlength: 50 },
+            ) +
             field('description', '소개', 'textarea', '', {
               optional: true,
               maxlength: 500,
@@ -224,6 +231,177 @@ export function createWorkshop(ui) {
         ),
       )
     );
+  }
+  // 이 캐릭터로 만들 표정·상황·행동을 고르는 화면. 표정/상황 프리셋 탭 + 직접 입력 탭.
+  const PANES = [
+    ['EMOTION', '표정'],
+    ['SITUATION', '상황'],
+    ['CUSTOM', '직접 입력'],
+  ];
+  const customRow = (n) =>
+    '<div class="custom-row"><input name="custom-label-' +
+    n +
+    '" maxlength="30" placeholder="행동 이름 (예: 손 흔들기)" aria-label="행동 이름">' +
+    '<input name="custom-prompt-' +
+    n +
+    '" maxlength="300" placeholder="자세한 설명 (선택, 예: 커피잔을 들고)" aria-label="자세한 설명"></div>';
+  function emojiMaker(s, presets) {
+    const byCategory = (category) =>
+      presets
+        .filter((e) => (e.category || 'EMOTION') === category)
+        .map(
+          (e) =>
+            '<label class="chip-check"><input type="checkbox" name="emotion-' +
+            h(e.key) +
+            '">' +
+            h(e.label) +
+            '</label>',
+        )
+        .join('');
+    return (
+      '<div class="emoji-pick">' +
+      '<h2>이 캐릭터로 이모티콘 만들기</h2>' +
+      '<p class="muted">같은 캐릭터가 여러 표정과 상황, 행동을 하는 이모티콘을 만들어요. 고른 만큼 한 번에 만들어지고, 완성되는 대로 아래에 나타나요.</p>' +
+      '<div class="tabs pick-tabs" role="group">' +
+      PANES.map(
+        ([value, text], index) =>
+          '<button type="button" data-pane-btn="' +
+          value +
+          '" aria-pressed="' +
+          (index === 0) +
+          '">' +
+          text +
+          '</button>',
+      ).join('') +
+      '</div>' +
+      ui.form(
+        PANES.map(([value]) =>
+          value === 'CUSTOM'
+            ? '<div class="pick-pane" data-pane="CUSTOM" hidden><p class="muted">프리셋에 없는 행동도 직접 만들 수 있어요.</p><div class="custom-list">' +
+              customRow(0) +
+              customRow(1) +
+              '</div><button type="button" class="secondary" data-add-custom>행동 추가</button></div>'
+            : '<div class="pick-pane" data-pane="' +
+              value +
+              '"' +
+              (value === 'EMOTION' ? '' : ' hidden') +
+              '><div class="row space"><button type="button" class="secondary" data-select-all="' +
+              value +
+              '">전체 선택·해제</button></div><div class="chip-grid">' +
+              byCategory(value) +
+              '</div></div>',
+        ).join('') +
+          field('extra', '모든 이모티콘에 더할 요청 (선택)', 'textarea', '', {
+            optional: true,
+            maxlength: 300,
+            help: '예: 선글라스를 쓰고, 배경은 없이',
+          }),
+        async (data, form) => {
+          const extra = (data.extra || '').trim();
+          const emotions = presets
+            .filter((e) => data['emotion-' + e.key])
+            .map((e) => ({ key: e.key, customPrompt: extra }));
+          for (const name of Object.keys(data)) {
+            const m = name.match(/^custom-label-(\d+)$/);
+            if (!m || !String(data[name]).trim()) continue;
+            const detail = String(data['custom-prompt-' + m[1]] || '').trim();
+            emotions.push({
+              key: String(data[name]).trim(),
+              customPrompt: [detail, extra].filter(Boolean).join(', '),
+            });
+          }
+          if (!emotions.length || emotions.length > 16)
+            throw Error('표정·상황·행동을 1~16개 골라 주세요.');
+          const key = ui.key(form);
+          await cost('EMOTION_SET', emotions.length, async () => {
+            const job = await api('/sets/' + id(s.id) + '/generations', {
+              method: 'POST',
+              idempotencyKey: key,
+              body: { emotions },
+            });
+            ui.go('job', { id: job.jobId });
+          });
+        },
+        '이모티콘 만들기',
+        '<p class="muted pick-summary" role="status">고른 항목이 없어요.</p>',
+      ) +
+      '</div>'
+    );
+  }
+  // 탭 전환, 전체 선택, 행동 추가, 선택 개수·크레딧 표시
+  function wirePick(root) {
+    const form = root.querySelector('form'),
+      summary = root.querySelector('.pick-summary'),
+      submit = form.querySelector('[type=submit]');
+    let timer,
+      version = 0;
+    const count = () => {
+      const presets = form.querySelectorAll('input[name^="emotion-"]:checked').length;
+      const customs = [...form.querySelectorAll('input[name^="custom-label-"]')].filter(
+        (i) => i.value.trim(),
+      ).length;
+      return presets + customs;
+    };
+    async function refresh() {
+      const n = count();
+      submit.textContent = n ? n + '개 이모티콘 만들기' : '이모티콘 만들기';
+      if (!n) {
+        summary.textContent = '고른 항목이 없어요.';
+        return;
+      }
+      summary.textContent = n + '개 선택 · 크레딧 계산 중…';
+      const mine = ++version;
+      try {
+        const est = await api('/generations/estimates', {
+          method: 'POST',
+          body: { type: 'EMOTION_SET', count: Math.min(n, 16) },
+        });
+        if (mine !== version) return;
+        summary.textContent =
+          n + '개 선택 · ' + est.creditCost + ' 크레딧 (보유 ' + est.creditBalance + ')';
+        submit.textContent = n + '개 만들기 · ' + est.creditCost + ' 크레딧';
+      } catch {
+        if (mine === version) summary.textContent = n + '개 선택';
+      }
+    }
+    const later = () => {
+      clearTimeout(timer);
+      timer = setTimeout(refresh, 300);
+      const n = count();
+      submit.textContent = n ? n + '개 이모티콘 만들기' : '이모티콘 만들기';
+    };
+    root.addEventListener('click', (event) => {
+      const tabButton = event.target.closest('[data-pane-btn]');
+      if (tabButton) {
+        root.querySelectorAll('[data-pane-btn]').forEach((b) =>
+          b.setAttribute('aria-pressed', String(b === tabButton)),
+        );
+        root.querySelectorAll('.pick-pane').forEach((p) => {
+          p.hidden = p.dataset.pane !== tabButton.dataset.paneBtn;
+        });
+        return;
+      }
+      const all = event.target.closest('[data-select-all]');
+      if (all) {
+        const boxes = root.querySelectorAll(
+          '[data-pane="' + all.dataset.selectAll + '"] input[type=checkbox]',
+        );
+        const every = [...boxes].every((b) => b.checked);
+        boxes.forEach((b) => {
+          b.checked = !every;
+        });
+        later();
+        return;
+      }
+      if (event.target.closest('[data-add-custom]')) {
+        const list = root.querySelector('.custom-list');
+        if (list.children.length >= 16) return;
+        list.insertAdjacentHTML('beforeend', customRow(list.children.length));
+        list.lastElementChild.querySelector('input').focus();
+      }
+    });
+    root.addEventListener('input', later);
+    root.addEventListener('change', later);
   }
   async function set(params) {
     const s = await api('/sets/' + id(params.id)),
@@ -262,40 +440,7 @@ export function createWorkshop(ui) {
             downloadDialog('/sets/' + id(s.id) + '/download'),
           ) +
           '</div>' +
-          '<h2>감정별 이모티콘 생성</h2>' +
-          ui.form(
-            emotions
-              .map((e) =>
-                field('emotion-' + e.key, e.label, 'checkbox', false, {
-                  optional: true,
-                }),
-              )
-              .join('') +
-              field('extra', '추가 표현', 'textarea', '', {
-                optional: true,
-                maxlength: 300,
-              }),
-            async (data, form) => {
-              const selected = emotions.filter((e) => data['emotion-' + e.key]);
-              if (!selected.length || selected.length > 16)
-                throw Error('1~16개 표정을 선택해 주세요.');
-              const key = ui.key(form);
-              await cost('EMOTION_SET', selected.length, async () => {
-                const job = await api('/sets/' + id(s.id) + '/generations', {
-                  method: 'POST',
-                  idempotencyKey: key,
-                  body: {
-                    emotions: selected.map((e) => ({
-                      key: e.key,
-                      customPrompt: data.extra || '',
-                    })),
-                  },
-                });
-                ui.go('job', { id: job.jobId });
-              });
-            },
-            '선택한 표정 생성',
-          ),
+          emojiMaker(s, emotions),
       ) +
       (s.emoticons.some((e) => e.status === 'GENERATING')
         ? '<p class="muted" data-watch-set="' + h(s.id) + '" role="status">생성 중인 이모티콘이 있어요. 완성되는 대로 나타나요.</p>'
@@ -437,6 +582,8 @@ export function createWorkshop(ui) {
     const watch = document.querySelector('[data-watch-job]');
     if (watch)
       ui.schedule(() => ui.go('job', { id: watch.dataset.watchJob }), 2000);
+    const pick = document.querySelector('.emoji-pick');
+    if (pick) wirePick(pick);
     const watchSet = document.querySelector('[data-watch-set]');
     if (watchSet)
       ui.schedule(() => ui.go('set', { id: watchSet.dataset.watchSet }), 2500);
