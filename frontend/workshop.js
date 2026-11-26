@@ -1,4 +1,5 @@
 import { api, uploadImage } from './api.js';
+import { label } from './labels.js';
 import {
   h,
   id,
@@ -66,27 +67,44 @@ export function createWorkshop(ui) {
                     : tab === 'bookmarks'
                       ? 'post'
                       : 'product';
-            return (
-              '<article class="tile"><div class="art">' +
-              picture(
-                item.coverUrl ||
-                  item.baseImageUrl ||
-                  item.thumbnailUrl ||
-                  item.thumbnailUrls?.[0],
-                item.title || item.name,
-              ) +
-              '</div><h3>' +
-              h(item.title || item.name) +
-              '</h3><p class="muted">' +
-              h(item.status || '') +
-              '</p>' +
-              ui.link('열기', target, { id: raw.productId || item.id }) +
-              '</article>'
+            return ui.tile(
+              target,
+              { id: raw.productId || item.id },
+              {
+                art: picture(
+                  item.coverUrl ||
+                    item.baseImageUrl ||
+                    item.thumbnailUrl ||
+                    item.thumbnailUrls?.[0],
+                  item.title || item.name,
+                ),
+                title: item.title || item.name,
+                meta: h(label(item.status) || ''),
+              },
             );
           })
           .join('') +
         '</div>',
       { ...params, route: 'library' },
+      {
+        empty:
+          '<div class="empty"><p>' +
+          h(
+            {
+              sets: '아직 만든 이모티콘 세트가 없어요.',
+              characters: '아직 만든 캐릭터가 없어요.',
+              bookmarks: '북마크한 작품이 없어요.',
+              purchases: '구매한 작품이 없어요.',
+            }[tab] || '아직 내역이 없어요.',
+          ) +
+          '</p>' +
+          (tab === 'characters'
+            ? ui.link('첫 캐릭터 만들기', 'studio')
+            : tab === 'sets'
+              ? ui.link('새 세트 만들기', 'set-new')
+              : ui.link(tab === 'bookmarks' ? '커뮤니티 둘러보기' : '마켓 둘러보기', tab === 'bookmarks' ? 'community' : 'market')) +
+          '</div>',
+      },
     );
     return (
       heading('내 보관함') +
@@ -107,7 +125,7 @@ export function createWorkshop(ui) {
           '<p>' +
           h(c.description) +
           '</p><p class="muted">' +
-          h(c.status) +
+          h(label(c.status)) +
           '</p><div class="row">' +
           ui.action('정보 수정', () =>
             ui.edit(
@@ -267,7 +285,7 @@ export function createWorkshop(ui) {
             '</div><h3>' +
             h(e.label) +
             '</h3><p class="muted">' +
-            h(e.status) +
+            h(label(e.status)) +
             '</p>' +
             ui.link('편집·버전·다운로드', 'editor', { id: e.id }) +
             '</article>',
@@ -502,7 +520,7 @@ export function createWorkshop(ui) {
       heading('생성 작업') +
       panel(
         '<p>' +
-          h(j.status) +
+          h(label(j.status)) +
           ' · ' +
           h(j.progress || 0) +
           '%</p><p>대기 순번 ' +
@@ -552,9 +570,9 @@ export function createWorkshop(ui) {
               .map(
                 (j) =>
                   '<div class="list-row"><div>' +
-                  h(j.type) +
+                  h(label(j.type)) +
                   '<p class="muted">' +
-                  h(j.status) +
+                  h(label(j.status)) +
                   ' · ' +
                   h(j.creditCost) +
                   ' 크레딧</p></div>' +
@@ -564,6 +582,12 @@ export function createWorkshop(ui) {
               .join(''),
           ),
         { ...params, route: 'jobs' },
+        {
+          empty:
+            '<div class="empty"><p>아직 생성한 작업이 없어요.</p>' +
+            ui.link('이모티콘 만들러 가기', 'studio') +
+            '</div>',
+        },
       ))
     );
   }

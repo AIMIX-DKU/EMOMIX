@@ -1,4 +1,5 @@
 import { api, initializeCsrf, uploadImage } from './api.js';
+import { label } from './labels.js';
 
 const escape = (value) =>
   String(value ?? '').replace(
@@ -360,9 +361,9 @@ export function createLiveApp({ root, navigate, notify }) {
                 .map(
                   (item) =>
                     '<div class="list-row"><div><strong>' +
-                    escape(item.type) +
+                    escape(label(item.type)) +
                     '</strong><p class="muted">' +
-                    escape(item.status) +
+                    escape(label(item.status)) +
                     ' · ' +
                     escape(item.creditCost) +
                     ' 크레딧</p></div>' +
@@ -394,7 +395,7 @@ export function createLiveApp({ root, navigate, notify }) {
           .map(
             (item) =>
               '<div class="list-row"><span>' +
-              escape(item.type) +
+              escape(label(item.type)) +
               '</span><strong>' +
               escape(item.amount) +
               '</strong></div>',
@@ -419,7 +420,7 @@ export function createLiveApp({ root, navigate, notify }) {
             ? '생성 중 · ' + job.progress + '%'
             : job.status === 'SUCCEEDED'
               ? '생성이 완료됐어요.'
-              : '작업 종료 · ' + (job.errorCode || job.status);
+              : '작업 종료 · ' + (job.errorCode || label(job.status));
       if (job.status === 'SUCCEEDED' && job.type === 'CHARACTER_CANDIDATES') {
         const id = job.targetId || character?.id;
         character = await api('/characters/' + encodeURIComponent(id));

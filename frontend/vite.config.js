@@ -17,7 +17,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      '/api': {
+      '/api/': {
         target: 'https://emomix-backend.vercel.app',
         changeOrigin: true,
       },

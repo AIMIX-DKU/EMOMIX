@@ -1,9 +1,11 @@
 import { api } from './api.js';
+import { label } from './labels.js';
 import {
   h,
   id,
   picture,
   heading,
+  pageHead,
   panel,
   field,
   empty,
@@ -54,19 +56,22 @@ export function createSocial(ui, payments) {
     return (
       '<div class="grid">' +
       items
-        .map(
-          (p) =>
-            '<article class="tile"><div class="art">' +
-            picture(p.thumbnailUrls?.[0] || p.thumbnailUrl, p.title) +
-            '</div><h3>' +
-            h(p.title) +
-            '</h3><p class="muted">' +
-            h(p.author?.nickname) +
-            ' · 좋아요 ' +
-            h(p.likeCount || 0) +
-            '</p>' +
-            ui.link('작품 보기', 'post', { id: p.id }) +
-            '</article>',
+        .map((p) =>
+          ui.tile(
+            'post',
+            { id: p.id },
+            {
+              art: picture(p.thumbnailUrls?.[0] || p.thumbnailUrl, p.title),
+              title: p.title,
+              meta:
+                h(p.author?.nickname) +
+                ' · ♥ ' +
+                h(p.likeCount || 0) +
+                (p.commentCount !== undefined
+                  ? ' · 댓글 ' + h(p.commentCount)
+                  : ''),
+            },
+          ),
         )
         .join('') +
       '</div>'
@@ -80,39 +85,41 @@ export function createSocial(ui, payments) {
     });
     if (params.tag) query.set('tag', params.tag);
     if (params.authorId) query.set('authorId', params.authorId);
+    const sort = params.sort || 'LATEST';
+    const pick = (next) =>
+      next === 'RANKING'
+        ? ui.go('rankings')
+        : ui.go('community', { ...params, sort: next, page: 0 });
     return (
-      heading('커뮤니티', '작품과 프롬프트를 나눠보세요.') +
-      '<div class="row space">' +
-      ui.link('작품 공유', 'post-edit') +
-      ui.link('랭킹', 'rankings') +
-      ui.link('내 신고 내역', 'reports') +
+      pageHead(
+        '커뮤니티',
+        '작품과 프롬프트를 나눠보세요.',
+        ui.link('작품 올리기', 'post-edit').replace('secondary', 'primary'),
+      ) +
+      '<div class="row between wrap">' +
+      ui.segments(
+        [
+          ['LATEST', '최신'],
+          ['POPULAR', '인기'],
+          ['RANKING', '랭킹'],
+        ],
+        sort,
+        pick,
+      ) +
+      ui.searchForm((data) => ui.go('community', { ...params, ...data, page: 0 }), {
+        placeholder: '작품·제작자 검색',
+        value: params.keyword || '',
+      }) +
       '</div>' +
-      panel(
-        ui.form(
-          field('keyword', '작품·제작자 검색', 'text', params.keyword, {
-            optional: true,
-          }) +
-            field(
-              'sort',
-              '정렬',
-              [
-                ['LATEST', '최신순'],
-                ['POPULAR', '인기순'],
-              ],
-              params.sort,
-            ),
-          (data) => ui.go('community', data),
-          '검색',
-        ) +
-          '<div class="row">' +
+      (tags.length
+        ? '<div class="row space">' +
           tags
             .map((t) => ui.link('#' + t.name, 'community', { tag: t.name }))
             .join('') +
-          '</div>',
-      ) +
-      (await ui.paginate('/posts?' + query, cards, {
-        ...params,
-        route: 'community',
+          '</div>'
+        : '') +
+      (await ui.paginate('/posts?' + query, cards, { ...params, route: 'community' }, {
+        empty: empty('아직 공유된 작품이 없어요. 첫 작품을 올려 보세요.'),
       }))
     );
   }
@@ -437,7 +444,7 @@ export function createSocial(ui, payments) {
                   '</p><small>' +
                   date(r.createdAt) +
                   '</small></div><span>' +
-                  h(r.status) +
+                  h(label(r.status)) +
                   '</span></div>',
               )
               .join(''),

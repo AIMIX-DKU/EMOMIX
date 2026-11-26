@@ -34,6 +34,14 @@ export const heading = (title, body = '') =>
   h(title) +
   '</h1>' +
   (body ? '<p class="lead space">' + h(body) + '</p>' : '');
+export const pageHead = (title, body = '', actions = '') =>
+  '<div class="page-head"><div><h1>' +
+  h(title) +
+  '</h1>' +
+  (body ? '<p class="lead">' + h(body) + '</p>' : '') +
+  '</div>' +
+  (actions ? '<div class="row">' + actions + '</div>' : '') +
+  '</div>';
 export const panel = (body) =>
   '<section class="panel stack">' + body + '</section>';
 export const empty = (text = '아직 내역이 없어요.') =>
@@ -175,6 +183,51 @@ export function createUI(root, go, notify) {
     '</button>';
   const link = (label, page, params = {}) =>
     action(label, () => go(page, params));
+  // 카드 전체가 눌리는 목록 카드. art 는 이미 만들어진 HTML, 나머지는 텍스트.
+  const tile = (page, params, { art, title, meta = '', badge = '' }) =>
+    '<button type="button" class="tile" data-do="' +
+    key(() => go(page, params)) +
+    '">' +
+    '<span class="art">' +
+    art +
+    '</span>' +
+    (badge ? '<span class="badge">' + h(badge) + '</span>' : '') +
+    '<strong class="tile-title">' +
+    h(title) +
+    '</strong>' +
+    (meta ? '<span class="muted">' + meta + '</span>' : '') +
+    '</button>';
+  // 한 줄 검색창 (선택 입력 select 포함)
+  const searchForm = (handler, { name = 'keyword', placeholder, value = '', extra = '' }) =>
+    '<form class="toolbar" role="search" data-send="' +
+    key(handler) +
+    '"><input name="' +
+    h(name) +
+    '" type="search" placeholder="' +
+    h(placeholder) +
+    '" aria-label="' +
+    h(placeholder) +
+    '" value="' +
+    h(value) +
+    '">' +
+    extra +
+    '<button type="submit" class="primary">검색</button></form>';
+  // 탭처럼 보이는 선택 버튼 묶음. items: [값, 라벨]
+  const segments = (items, current, pick) =>
+    '<div class="tabs" role="group">' +
+    items
+      .map(
+        ([value, text]) =>
+          '<button type="button" data-do="' +
+          key(() => pick(value)) +
+          '" aria-pressed="' +
+          (String(value) === String(current ?? '')) +
+          '">' +
+          h(text) +
+          '</button>',
+      )
+      .join('') +
+    '</div>';
   const form = (fields, handler, label = '저장', help = '') =>
     '<form class="stack" data-send="' +
     key(handler) +
@@ -232,13 +285,14 @@ export function createUI(root, go, notify) {
         '</div>',
     );
   }
-  async function paginate(path, render, params = {}) {
+  async function paginate(path, render, params = {}, { empty: emptyHtml } = {}) {
     const page = Number(params.page || 0);
     const join = path.includes('?') ? '&' : '?';
     const data = await api(path + join + 'page=' + page + '&size=12');
     return (
-      (data.items.length ? render(data.items) : empty()) +
-      '<div class="row top">' +
+      (data.items.length ? render(data.items) : (emptyHtml ?? empty())) +
+      ((data.totalPages || 1) > 1
+        ? '<div class="row top pager">' +
       (page > 0
         ? action('이전', () => go(params.route, { ...params, page: page - 1 }))
         : '') +
@@ -250,7 +304,8 @@ export function createUI(root, go, notify) {
       (page + 1 < data.totalPages
         ? action('다음', () => go(params.route, { ...params, page: page + 1 }))
         : '') +
-      '</div>'
+          '</div>'
+        : '')
     );
   }
   root.addEventListener('click', async (event) => {
@@ -310,6 +365,9 @@ export function createUI(root, go, notify) {
   return {
     action,
     link,
+    tile,
+    searchForm,
+    segments,
     form,
     edit,
     dialog,
