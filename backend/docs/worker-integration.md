@@ -132,3 +132,9 @@ while True:
     except Exception as e:
         call(f"/{job['jobId']}/fail", {"reason": "GPU_ERROR", "message": str(e)[:200]})
 ```
+
+## 캐릭터 결과 편집
+
+프론트에서 초기 생성은 1~3장을 선택하며 claim의 `params.count`만큼 반환한다. 이후 전체 수정은 `CHARACTER_CANDIDATES`와 선택 결과 1장을 `inputImageUrls`로 전달한다. 부분 수정은 기존 `INPAINT` 유형으로 선택한 결과 1장과 같은 크기의 maskImageUrl을 전달한다. 수정 요청은 항상 1장이다.
+
+워커는 평소와 같이 결과를 업로드하고 complete한다. 서버가 targetType=CHARACTER인 작업을 캐릭터 수정 기록에 추가하며, 인페인트는 마스크 밖 픽셀을 원본으로 합성한다. 사용자 확정 전에는 기준 캐릭터 이미지를 덮어쓰지 않는다. 새 DB 마이그레이션이나 새 워커 작업 유형은 없다.

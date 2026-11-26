@@ -29242,6 +29242,862 @@
           }
         }
       }
+    },
+    "/characters/{characterId}/regenerations": {
+      "post": {
+        "tags": [
+          "Character"
+        ],
+        "summary": "선택한 캐릭터 결과를 참고해 전체 수정",
+        "operationId": "character_regenerations",
+        "description": "선택한 저장 결과(sourceCandidateImageId)를 기준으로 1장 수정한다. 원본은 수정 기록에 남으며 결과는 새로운 캐릭터 후보로 저장된다. 확정 요청 전에는 기준 캐릭터 이미지가 바뀌지 않는다. 비동기 job을 조회해 완료 결과의 id로 현재 미리보기를 선택한다. 작업 type=CHARACTER_CANDIDATES, targetType=CHARACTER.",
+        "parameters": [
+          {
+            "name": "characterId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "리소스 ID"
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "중복 처리 방지용 UUID. 같은 키로 재전송하면 최초 결과를 돌려줌."
+          }
+        ],
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "prompt": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300,
+                    "description": "수정할 내용"
+                  },
+                  "sourceCandidateImageId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "이 캐릭터에 속한 생성/수정 결과 imageId"
+                  }
+                },
+                "required": [
+                  "sourceCandidateImageId",
+                  "prompt"
+                ]
+              },
+              "example": {
+                "sourceCandidateImageId": "result-id",
+                "prompt": "눈을 웃는 눈으로 변경"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "생성 작업이 등록되었습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "message",
+                    "data",
+                    "errorCode"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "jobId": {
+                          "type": "string",
+                          "description": "생성 작업 ID"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "CHARACTER_CANDIDATES",
+                            "EMOTION_SET",
+                            "EMOTION_REGENERATE",
+                            "INPAINT"
+                          ],
+                          "description": "작업 종류"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "QUEUED",
+                            "RUNNING",
+                            "SUCCEEDED",
+                            "FAILED",
+                            "CANCELED"
+                          ],
+                          "description": "작업 상태"
+                        },
+                        "queuePosition": {
+                          "type": "integer",
+                          "description": "대기 순번 (QUEUED일 때만, 그 외 0)"
+                        },
+                        "progress": {
+                          "type": "integer",
+                          "description": "진행률 0~100"
+                        },
+                        "creditCost": {
+                          "type": "integer",
+                          "description": "예약된 크레딧"
+                        },
+                        "targetType": {
+                          "type": "string",
+                          "enum": [
+                            "CHARACTER",
+                            "SET",
+                            "EMOTICON"
+                          ],
+                          "description": "결과가 붙는 대상 종류"
+                        },
+                        "targetId": {
+                          "type": "string",
+                          "description": "대상 ID"
+                        },
+                        "result": {
+                          "type": "object",
+                          "properties": {
+                            "images": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "description": "이미지 ID(후보 이미지 또는 이모티콘 ID)"
+                                  },
+                                  "imageUrl": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "description": "이미지 URL"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "imageUrl"
+                                ]
+                              },
+                              "description": "생성된 이미지 목록"
+                            }
+                          },
+                          "description": "결과 (SUCCEEDED일 때만, 그 외 null)",
+                          "nullable": true,
+                          "required": [
+                            "images"
+                          ]
+                        },
+                        "errorCode": {
+                          "type": "string",
+                          "description": "실패 시 에러 코드 (그 외 null)",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "요청 일시"
+                        },
+                        "startedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "시작 일시 (없으면 null)",
+                          "nullable": true
+                        },
+                        "finishedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "종료 일시 (없으면 null)",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "jobId",
+                        "type",
+                        "status",
+                        "queuePosition",
+                        "progress",
+                        "creditCost",
+                        "targetType",
+                        "targetId",
+                        "result",
+                        "errorCode",
+                        "createdAt",
+                        "startedAt",
+                        "finishedAt"
+                      ]
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "message": "생성 작업이 등록되었습니다.",
+                  "data": {
+                    "jobId": "job-001",
+                    "type": "EMOTION_SET",
+                    "status": "QUEUED",
+                    "queuePosition": 2,
+                    "progress": 0,
+                    "creditCost": 8,
+                    "targetType": "SET",
+                    "targetId": "set-001",
+                    "result": {
+                      "images": [
+                        {
+                          "id": "img-001",
+                          "imageUrl": "https://cdn.emomix.example/img/001.png"
+                        }
+                      ]
+                    },
+                    "errorCode": null,
+                    "createdAt": "2026-11-17T12:00:00Z",
+                    "startedAt": null,
+                    "finishedAt": null
+                  },
+                  "errorCode": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR: 요청 값 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "VALIDATION_ERROR": {
+                    "summary": "요청 값 오류",
+                    "value": {
+                      "success": false,
+                      "message": "요청 값이 올바르지 않습니다.",
+                      "data": null,
+                      "errorCode": "VALIDATION_ERROR"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED: accessToken 없음/만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "accessToken 없음/만료",
+                    "value": {
+                      "success": false,
+                      "message": "로그인이 필요합니다.",
+                      "data": null,
+                      "errorCode": "UNAUTHORIZED"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "INSUFFICIENT_CREDIT: 예약할 크레딧이 부족함",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "INSUFFICIENT_CREDIT": {
+                    "summary": "예약할 크레딧이 부족함",
+                    "value": {
+                      "success": false,
+                      "message": "크레딧이 부족합니다.",
+                      "data": null,
+                      "errorCode": "INSUFFICIENT_CREDIT"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF_INVALID: X-CSRF-Token 헤더 누락 또는 쿠키와 불일치",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CSRF_INVALID": {
+                    "summary": "X-CSRF-Token 헤더 누락 또는 쿠키와 불일치",
+                    "value": {
+                      "success": false,
+                      "message": "CSRF 검증에 실패했습니다.",
+                      "data": null,
+                      "errorCode": "CSRF_INVALID"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND: 대상 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "NOT_FOUND": {
+                    "summary": "대상 없음",
+                    "value": {
+                      "success": false,
+                      "message": "존재하지 않는 리소스입니다.",
+                      "data": null,
+                      "errorCode": "NOT_FOUND"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENCY_CONFLICT: 같은 키로 다른 요청",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "IDEMPOTENCY_CONFLICT": {
+                    "summary": "같은 키로 다른 요청",
+                    "value": {
+                      "success": false,
+                      "message": "같은 Idempotency-Key로 다른 요청이 처리 중이거나 완료되었습니다.",
+                      "data": null,
+                      "errorCode": "IDEMPOTENCY_CONFLICT"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "CONTENT_BLOCKED: 프롬프트 또는 참고 이미지가 정책에 걸림",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CONTENT_BLOCKED": {
+                    "summary": "프롬프트 또는 참고 이미지가 정책에 걸림",
+                    "value": {
+                      "success": false,
+                      "message": "허용되지 않는 콘텐츠입니다.",
+                      "data": null,
+                      "errorCode": "CONTENT_BLOCKED"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "GENERATION_QUEUE_FULL: 대기열 길이가 상한을 초과함 / GENERATION_LIMIT_EXCEEDED: 사용자 일일 생성 한도 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "GENERATION_QUEUE_FULL": {
+                    "summary": "대기열 길이가 상한을 초과함",
+                    "value": {
+                      "success": false,
+                      "message": "생성 대기열이 가득 찼습니다. 잠시 후 다시 시도해주세요.",
+                      "data": null,
+                      "errorCode": "GENERATION_QUEUE_FULL"
+                    }
+                  },
+                  "GENERATION_LIMIT_EXCEEDED": {
+                    "summary": "사용자 일일 생성 한도 초과",
+                    "value": {
+                      "success": false,
+                      "message": "일일 생성 한도를 초과했습니다.",
+                      "data": null,
+                      "errorCode": "GENERATION_LIMIT_EXCEEDED"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/characters/{characterId}/inpaints": {
+      "post": {
+        "tags": [
+          "Character"
+        ],
+        "summary": "선택한 캐릭터 결과의 영역 수정",
+        "operationId": "character_inpaints",
+        "description": "선택한 저장 결과(sourceCandidateImageId)를 기준으로 1장 수정한다. 원본은 수정 기록에 남으며 결과는 새로운 캐릭터 후보로 저장된다. 확정 요청 전에는 기준 캐릭터 이미지가 바뀌지 않는다. 비동기 job을 조회해 완료 결과의 id로 현재 미리보기를 선택한다. 원본과 같은 크기의 MASK 업로드를 확정한 후 maskUploadId를 전달한다. 흰색은 수정, 검은색은 보존이며 서버는 마스크 밖을 원본 픽셀로 합성한다. 작업 type=INPAINT, targetType=CHARACTER.",
+        "parameters": [
+          {
+            "name": "characterId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "리소스 ID"
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "중복 처리 방지용 UUID. 같은 키로 재전송하면 최초 결과를 돌려줌."
+          }
+        ],
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "maskUploadId": {
+                    "type": "string",
+                    "description": "마스크 업로드 ID (purpose=MASK)"
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300,
+                    "description": "수정할 내용"
+                  },
+                  "sourceCandidateImageId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "이 캐릭터에 속한 생성/수정 결과 imageId"
+                  }
+                },
+                "required": [
+                  "sourceCandidateImageId",
+                  "prompt",
+                  "maskUploadId"
+                ]
+              },
+              "example": {
+                "sourceCandidateImageId": "result-id",
+                "prompt": "눈을 웃는 눈으로 변경",
+                "maskUploadId": "mask-upload-id"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "생성 작업이 등록되었습니다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "message",
+                    "data",
+                    "errorCode"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "jobId": {
+                          "type": "string",
+                          "description": "생성 작업 ID"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "CHARACTER_CANDIDATES",
+                            "EMOTION_SET",
+                            "EMOTION_REGENERATE",
+                            "INPAINT"
+                          ],
+                          "description": "작업 종류"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "QUEUED",
+                            "RUNNING",
+                            "SUCCEEDED",
+                            "FAILED",
+                            "CANCELED"
+                          ],
+                          "description": "작업 상태"
+                        },
+                        "queuePosition": {
+                          "type": "integer",
+                          "description": "대기 순번 (QUEUED일 때만, 그 외 0)"
+                        },
+                        "progress": {
+                          "type": "integer",
+                          "description": "진행률 0~100"
+                        },
+                        "creditCost": {
+                          "type": "integer",
+                          "description": "예약된 크레딧"
+                        },
+                        "targetType": {
+                          "type": "string",
+                          "enum": [
+                            "CHARACTER",
+                            "SET",
+                            "EMOTICON"
+                          ],
+                          "description": "결과가 붙는 대상 종류"
+                        },
+                        "targetId": {
+                          "type": "string",
+                          "description": "대상 ID"
+                        },
+                        "result": {
+                          "type": "object",
+                          "properties": {
+                            "images": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "description": "이미지 ID(후보 이미지 또는 이모티콘 ID)"
+                                  },
+                                  "imageUrl": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "description": "이미지 URL"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "imageUrl"
+                                ]
+                              },
+                              "description": "생성된 이미지 목록"
+                            }
+                          },
+                          "description": "결과 (SUCCEEDED일 때만, 그 외 null)",
+                          "nullable": true,
+                          "required": [
+                            "images"
+                          ]
+                        },
+                        "errorCode": {
+                          "type": "string",
+                          "description": "실패 시 에러 코드 (그 외 null)",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "요청 일시"
+                        },
+                        "startedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "시작 일시 (없으면 null)",
+                          "nullable": true
+                        },
+                        "finishedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "종료 일시 (없으면 null)",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "jobId",
+                        "type",
+                        "status",
+                        "queuePosition",
+                        "progress",
+                        "creditCost",
+                        "targetType",
+                        "targetId",
+                        "result",
+                        "errorCode",
+                        "createdAt",
+                        "startedAt",
+                        "finishedAt"
+                      ]
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "message": "생성 작업이 등록되었습니다.",
+                  "data": {
+                    "jobId": "job-001",
+                    "type": "EMOTION_SET",
+                    "status": "QUEUED",
+                    "queuePosition": 2,
+                    "progress": 0,
+                    "creditCost": 8,
+                    "targetType": "SET",
+                    "targetId": "set-001",
+                    "result": {
+                      "images": [
+                        {
+                          "id": "img-001",
+                          "imageUrl": "https://cdn.emomix.example/img/001.png"
+                        }
+                      ]
+                    },
+                    "errorCode": null,
+                    "createdAt": "2026-11-17T12:00:00Z",
+                    "startedAt": null,
+                    "finishedAt": null
+                  },
+                  "errorCode": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR: 마스크 크기가 원본과 다름",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "VALIDATION_ERROR": {
+                    "summary": "마스크 크기가 원본과 다름",
+                    "value": {
+                      "success": false,
+                      "message": "요청 값이 올바르지 않습니다.",
+                      "data": null,
+                      "errorCode": "VALIDATION_ERROR"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED: accessToken 없음/만료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "UNAUTHORIZED": {
+                    "summary": "accessToken 없음/만료",
+                    "value": {
+                      "success": false,
+                      "message": "로그인이 필요합니다.",
+                      "data": null,
+                      "errorCode": "UNAUTHORIZED"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "INSUFFICIENT_CREDIT: 예약할 크레딧이 부족함",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "INSUFFICIENT_CREDIT": {
+                    "summary": "예약할 크레딧이 부족함",
+                    "value": {
+                      "success": false,
+                      "message": "크레딧이 부족합니다.",
+                      "data": null,
+                      "errorCode": "INSUFFICIENT_CREDIT"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF_INVALID: X-CSRF-Token 헤더 누락 또는 쿠키와 불일치",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CSRF_INVALID": {
+                    "summary": "X-CSRF-Token 헤더 누락 또는 쿠키와 불일치",
+                    "value": {
+                      "success": false,
+                      "message": "CSRF 검증에 실패했습니다.",
+                      "data": null,
+                      "errorCode": "CSRF_INVALID"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND: 대상 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "NOT_FOUND": {
+                    "summary": "대상 없음",
+                    "value": {
+                      "success": false,
+                      "message": "존재하지 않는 리소스입니다.",
+                      "data": null,
+                      "errorCode": "NOT_FOUND"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "IDEMPOTENCY_CONFLICT: 같은 키로 다른 요청",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "IDEMPOTENCY_CONFLICT": {
+                    "summary": "같은 키로 다른 요청",
+                    "value": {
+                      "success": false,
+                      "message": "같은 Idempotency-Key로 다른 요청이 처리 중이거나 완료되었습니다.",
+                      "data": null,
+                      "errorCode": "IDEMPOTENCY_CONFLICT"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "CONTENT_BLOCKED: 프롬프트 또는 참고 이미지가 정책에 걸림",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "CONTENT_BLOCKED": {
+                    "summary": "프롬프트 또는 참고 이미지가 정책에 걸림",
+                    "value": {
+                      "success": false,
+                      "message": "허용되지 않는 콘텐츠입니다.",
+                      "data": null,
+                      "errorCode": "CONTENT_BLOCKED"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "GENERATION_QUEUE_FULL: 대기열 길이가 상한을 초과함 / GENERATION_LIMIT_EXCEEDED: 사용자 일일 생성 한도 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "examples": {
+                  "GENERATION_QUEUE_FULL": {
+                    "summary": "대기열 길이가 상한을 초과함",
+                    "value": {
+                      "success": false,
+                      "message": "생성 대기열이 가득 찼습니다. 잠시 후 다시 시도해주세요.",
+                      "data": null,
+                      "errorCode": "GENERATION_QUEUE_FULL"
+                    }
+                  },
+                  "GENERATION_LIMIT_EXCEEDED": {
+                    "summary": "사용자 일일 생성 한도 초과",
+                    "value": {
+                      "success": false,
+                      "message": "일일 생성 한도를 초과했습니다.",
+                      "data": null,
+                      "errorCode": "GENERATION_LIMIT_EXCEEDED"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

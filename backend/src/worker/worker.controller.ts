@@ -110,6 +110,7 @@ export class WorkerController {
     );
     const job = await this.leased(jobId, b.workerId);
     const work = job.params as unknown as Work;
+    if ((job.type === 'INPAINT' || job.type === 'EMOTION_REGENERATE') && b.images.length !== 1) throw new ApiError('VALIDATION_ERROR', '수정 작업에는 결과 1장이 필요합니다.');
     if (b.images.some((i) => !i.uploadKey.startsWith(`generated/${jobId}/`))) throw new ApiError('VALIDATION_ERROR', '이 작업의 업로드 키가 아닙니다.');
 
     // 파일 검증(실제로 올라왔는지, 이미지인지)
@@ -137,7 +138,7 @@ export class WorkerController {
       if (claimed.count !== 1) throw new ApiError('LEASE_EXPIRED');
       const out: { id: string; key: string }[] = [];
 
-      if (job.type === 'CHARACTER_CANDIDATES') {
+      if (job.targetType === 'CHARACTER') {
         for (const i of images) {
           const c = await tx.characterCandidate.create({ data: { characterId: job.targetId, jobId: job.id, imageKey: i.key } });
           out.push({ id: c.id, key: i.key });

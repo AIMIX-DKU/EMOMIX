@@ -5,6 +5,7 @@ import { ApiError } from '../common/envelope.js';
 import { StorageService } from '../common/storage.service.js';
 import { parse, pageOf, pageResult, z } from '../common/validate.js';
 import { GenerationService } from '../generation/generation.service.js';
+import { sniffImage } from '../upload/image.js';
 import { PrismaService } from '../prisma.service.js';
 
 export const isPublishedSet = (setId: string, prisma: PrismaService) =>
@@ -134,6 +135,43 @@ export class CharacterController {
       cost: await this.gen.costOf('CHARACTER_CANDIDATES', count), count,
       work: { prompt, inputImageKeys: refs.map((r) => r.storageKey), count, characterId: c.id },
       fingerprint: [count, b.extraPrompt ?? ''],
+    });
+  }
+
+  /** Repeat edits always reference a saved result belonging to this character. */
+  private async source(me: Me, characterId: string, imageId: string) {
+    const character = await this.own(me, characterId);
+    const image = await this.prisma.characterCandidate.findFirst({ where: { id: imageId, characterId: character.id } });
+    if (!image) throw new ApiError('NOT_FOUND');
+    return { character, image };
+  }
+
+  @Post('characters/:id/regenerations') @HttpCode(202) @Access('user')
+  async regenerate(@CurrentUser() me: Me, @Param('id') id: string, @Headers('idempotency-key') key: string | undefined, @Body() body: unknown) {
+    const b = parse(z.object({ sourceCandidateImageId: z.string().min(1), prompt: z.string().trim().min(1).max(300) }), body);
+    const { character, image } = await this.source(me, id, b.sourceCandidateImageId);
+    return this.gen.create({
+      userId: me.id, idempotencyKey: key, type: 'CHARACTER_CANDIDATES', targetType: 'CHARACTER', targetId: character.id,
+      cost: await this.gen.costOf('CHARACTER_CANDIDATES', 1), count: 1,
+      work: { prompt: [character.appearanceDescription ?? character.description, b.prompt].filter(Boolean).join('. '), inputImageKeys: [image.imageKey], count: 1, characterId: character.id },
+      fingerprint: ['edit', image.id, b.prompt],
+    });
+  }
+
+  @Post('characters/:id/inpaints') @HttpCode(202) @Access('user')
+  async inpaint(@CurrentUser() me: Me, @Param('id') id: string, @Headers('idempotency-key') key: string | undefined, @Body() body: unknown) {
+    const b = parse(z.object({ sourceCandidateImageId: z.string().min(1), maskUploadId: z.string().min(1), prompt: z.string().trim().min(1).max(300) }), body);
+    const { character, image } = await this.source(me, id, b.sourceCandidateImageId);
+    const mask = await this.prisma.upload.findFirst({ where: { id: b.maskUploadId, ownerId: me.id, purpose: 'MASK', status: 'CONFIRMED' } });
+    if (!mask) throw new ApiError('VALIDATION_ERROR', '사용할 수 없는 수정 영역입니다.');
+    const dims = sniffImage(await this.storage.readBytes(image.imageKey));
+    if (!dims || dims.width !== mask.width || dims.height !== mask.height) throw new ApiError('VALIDATION_ERROR', '수정 영역 크기가 원본과 다릅니다.');
+    return this.gen.create({
+      userId: me.id, idempotencyKey: key, type: 'INPAINT', targetType: 'CHARACTER', targetId: character.id,
+      cost: await this.gen.costOf('INPAINT', 1), count: 1,
+      work: { prompt: [character.appearanceDescription ?? character.description, b.prompt].filter(Boolean).join('. '), inputImageKeys: [image.imageKey], maskKey: mask.storageKey, originalKey: image.imageKey, count: 1, characterId: character.id },
+      fingerprint: [image.id, mask.id, b.prompt],
+      prepare: async (tx) => { await tx.upload.update({ where: { id: mask.id }, data: { linked: true } }); },
     });
   }
 
