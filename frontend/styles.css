@@ -1224,3 +1224,22 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- 고급 설정(시드) ---- */
+#emomix-full details.advanced {
+  border: 1px solid #d2e1f6;
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: #f8fbff;
+}
+#emomix-full details.advanced summary {
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 13px;
+}
+#emomix-full details.advanced label {
+  margin-top: 8px;
+}
+#emomix-full details.advanced .row input {
+  flex: 1;
+}

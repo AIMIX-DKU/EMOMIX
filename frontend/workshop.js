@@ -295,7 +295,21 @@ export function createWorkshop(ui) {
             optional: true,
             maxlength: 300,
             help: '예: 선글라스를 쓰고, 배경은 없이',
-          }),
+          }) +
+          field('negativePrompt', '넣고 싶지 않은 것 (선택)', 'textarea', '', {
+            optional: true,
+            maxlength: 300,
+            help: '예: 글자, 흐릿한 선',
+          }) +
+          '<details class="advanced"><summary>고급 설정 · 시드</summary>' +
+          field('seed', '시드 (선택)', 'number', '', {
+            optional: true,
+            min: 0,
+            max: 2147483647,
+            step: 1,
+            help: '비우면 무작위예요. 같은 시드로 같은 선택을 만들면 같은 결과가 나와요.',
+          }) +
+          '</details>',
         async (data, form) => {
           const extra = (data.extra || '').trim();
           const emotions = presets
@@ -317,7 +331,11 @@ export function createWorkshop(ui) {
             const job = await api('/sets/' + id(s.id) + '/generations', {
               method: 'POST',
               idempotencyKey: key,
-              body: { emotions },
+              body: {
+                emotions,
+                ...(data.seed !== undefined && data.seed !== '' ? { seed: Number(data.seed) } : {}),
+                ...(data.negativePrompt ? { negativePrompt: data.negativePrompt } : {}),
+              },
             });
             ui.go('job', { id: job.jobId });
           });
@@ -628,6 +646,9 @@ export function createWorkshop(ui) {
           ' 크레딧</p><p role="status">' +
           h(j.errorCode || '') +
           '</p>' +
+          (j.seed != null
+            ? '<p class="muted">사용된 시드 <b>' + h(j.seed) + '</b> · 같은 시드로 같은 설정이면 같은 결과를 기대할 수 있어요.</p>'
+            : '') +
           '<div class="grid">' +
           (delayed
             ? '<p role="status">아직 생성이 시작되지 않았어요. 대기가 계속되면 운영자에게 작업 수신 상태를 문의하거나 대기 취소를 선택해 주세요. 대기 취소 시 예약 크레딧은 반환됩니다.</p>'

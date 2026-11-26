@@ -61,7 +61,11 @@ export function createLiveApp({ root, navigate, notify }) {
     timer;
   const main = root.querySelector('main');
   // 후보 장수(1~3), 장수별 크레딧, 보유 크레딧, 이번 요청 장수
-  let count = 1,
+  let negative = '',
+    seedInput = '',
+    jobSeed,
+    jobNegative = '',
+    count = 1,
     estimates = {},
     balance = null,
     jobCount = 1;
@@ -191,9 +195,18 @@ export function createLiveApp({ root, navigate, notify }) {
       '<div class="columns"><form class="panel tinted stack" data-live-form="generate"><label>어떤 캐릭터를 만들까요?<textarea name="description" rows="3" maxlength="500" required placeholder="예시) 우주복을 입은 말랑한 물방울 캐릭터">' +
       escape(description) +
       '</textarea></label>' +
+      '<label>넣고 싶지 않은 것 (선택)<textarea name="negative" rows="2" maxlength="300" placeholder="예) 배경, 글자, 흐릿한 선">' +
+      escape(negative) +
+      '</textarea></label>' +
       '<label>그림체<select name="style" required>' +
       options +
       '</select></label><label class="upload">참고 이미지 추가<input name="reference" type="file" accept="image/png,image/jpeg,image/webp"></label>' +
+      '<details class="advanced"' +
+      (seedInput ? ' open' : '') +
+      '><summary>고급 설정 · 시드</summary><label>시드 (선택)<span class="row"><input name="seed" type="number" min="0" max="2147483647" step="1" inputmode="numeric" placeholder="비우면 무작위" value="' +
+      escape(seedInput) +
+      '"><button type="button" class="secondary" data-live="seed-random">무작위</button></span>' +
+      '<small>같은 시드로, 같은 설명·그림체·장수로 만들면 같은 결과가 나와요. 마음에 드는 결과의 시드를 적어 두세요.</small></label></details>' +
       '<fieldset class="count-pick"><legend>후보 장수</legend><div class="tabs" role="group">' +
       [1, 2, 3]
         .map(
@@ -222,6 +235,13 @@ export function createLiveApp({ root, navigate, notify }) {
       '<section class="panel stack"><h2>캐릭터 미리보기</h2><p class="live-job" role="status">' +
       escape(jobMessage) +
       '</p>' +
+      (job && job.seed != null
+        ? '<p class="muted">사용된 시드 <b>' +
+          escape(job.seed) +
+          '</b> ' +
+          button('이 시드로 다시 만들기', 'seed-reuse') +
+          '</p>'
+        : '') +
       (candidates.length || pendingSlots()
         ? '<div class="thumbs">' +
           candidates
@@ -465,8 +485,21 @@ export function createLiveApp({ root, navigate, notify }) {
       : '<p class="muted">내역이 없어요.</p>';
   }
 
+  // 다시 그리기 전에 입력 중인 값을 상태로 옮겨, 입력한 설명이 사라지지 않게 한다
+  function syncForm() {
+    const form = main.querySelector('[data-live-form="generate"]');
+    if (!form) return;
+    const get = (name) => form.querySelector('[name="' + name + '"]');
+    description = get('description')?.value ?? description;
+    negative = get('negative')?.value ?? negative;
+    styleKey = get('style')?.value ?? styleKey;
+    seedInput = get('seed')?.value ?? seedInput;
+  }
   function repaintJob() {
-    if (page === 'studio') main.innerHTML = studioView();
+    if (page === 'studio') {
+      syncForm();
+      main.innerHTML = studioView();
+    }
   }
 
   async function checkJob() {
@@ -529,7 +562,11 @@ export function createLiveApp({ root, navigate, notify }) {
           '/candidates',
         {
           method: 'POST',
-          body: { count: jobCount },
+          body: {
+            count: jobCount,
+            ...(jobSeed !== undefined ? { seed: jobSeed } : {}),
+            ...(jobNegative ? { negativePrompt: jobNegative } : {}),
+          },
           idempotencyKey: request.key,
         },
       );
@@ -624,6 +661,14 @@ export function createLiveApp({ root, navigate, notify }) {
             estimate.creditBalance +
             ' 크레딧',
         );
+      negative = String(data.get('negative') || '').trim();
+      seedInput = String(data.get('seed') || '').trim();
+      if (seedInput && !/^\d{1,10}$/.test(seedInput))
+        throw new Error('시드는 0 이상의 정수로 입력해 주세요.');
+      if (seedInput && Number(seedInput) > 2147483647)
+        throw new Error('시드는 2147483647 이하로 입력해 주세요.');
+      jobSeed = seedInput ? Number(seedInput) : undefined;
+      jobNegative = negative;
       jobCount = count;
       const reference = data.get('reference'),
         referenceUploadIds = [];
@@ -695,6 +740,18 @@ export function createLiveApp({ root, navigate, notify }) {
       text.className = 'terms';
       text.textContent = data.content || data.body || data.title;
       main.querySelector('.live-terms').append(text);
+      return;
+    }
+    if (name === 'seed-random') {
+      syncForm();
+      seedInput = String(Math.floor(Math.random() * 2147483647));
+      repaintJob();
+      return;
+    }
+    if (name === 'seed-reuse') {
+      if (job?.seed != null) seedInput = String(job.seed);
+      repaintJob();
+      notify('시드를 입력칸에 넣었어요. 같은 설정으로 만들면 같은 결과가 나와요.');
       return;
     }
     if (name.startsWith('count-')) {
