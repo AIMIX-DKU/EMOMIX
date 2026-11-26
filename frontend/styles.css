@@ -917,3 +917,268 @@ body {
 #emomix-full .toolbar button {
   white-space: nowrap;
 }
+
+/* ---- 토스트 알림 ---- */
+#emomix-full .toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 60;
+  display: grid;
+  gap: 8px;
+  width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
+}
+#emomix-full .toast {
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #193251;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(25, 50, 81, 0.25);
+  animation: toast-in 0.18s ease-out;
+}
+#emomix-full .toast.error {
+  background: #b3261e;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ---- 이미지 로딩·빈 자리 ---- */
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+#emomix-full .live-image.is-loading,
+#emomix-full .thumb-skeleton {
+  background: linear-gradient(100deg, #e6eef9 30%, #f4f8fe 50%, #e6eef9 70%) 0 0 / 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+  min-height: 120px;
+  min-width: 120px;
+  border-radius: 12px;
+}
+#emomix-full .thumb-skeleton {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid #e3ecf8;
+}
+#emomix-full .img-empty {
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 120px;
+  border-radius: 12px;
+  background: #eef4fc;
+  color: #5b7491;
+  font-size: 22px;
+}
+#emomix-full .img-empty small {
+  font-size: 12px;
+}
+#emomix-full .tile-wrap {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+#emomix-full .tile-wrap > .secondary {
+  font-size: 12px;
+  min-height: 32px;
+}
+#emomix-full .tile.tile-pending {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px dashed #bcd0ea;
+  border-radius: 13px;
+  background: #fff;
+}
+#emomix-full .lib-section {
+  margin-bottom: 28px;
+}
+#emomix-full .lib-section h2 .muted {
+  font-weight: 400;
+  font-size: 13px;
+}
+
+/* ---- 스튜디오: 보유 크레딧, 장수 선택 ---- */
+#emomix-full .hero-credit {
+  margin-top: 6px;
+  color: var(--muted);
+}
+#emomix-full .hero-credit b {
+  color: var(--blue);
+  font-size: 18px;
+}
+#emomix-full fieldset.count-pick {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+#emomix-full .count-pick legend {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 0;
+}
+#emomix-full .count-pick .tabs {
+  margin: 6px 0;
+}
+#emomix-full .thumbs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* ---- 파일 끌어다 놓기 ---- */
+#emomix-full label:has(input[type='file']) {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  text-align: center;
+  padding: 16px 12px;
+  border: 1.5px dashed #a9c4e8;
+  border-radius: 12px;
+  background: #f8fbff;
+  cursor: pointer;
+  font-weight: 500;
+}
+#emomix-full label:has(input[type='file'])::after {
+  content: '클릭하거나 이미지를 끌어다 놓으세요 (PNG·JPG·WebP)';
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+#emomix-full label:has(input[type='file']).dragging {
+  background: #e5efff;
+  border-color: var(--blue);
+}
+#emomix-full label:has(input[type='file']):focus-within {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+#emomix-full label input[type='file'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+#emomix-full .file-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  font-size: 12px;
+  font-weight: 400;
+  word-break: break-all;
+}
+#emomix-full .file-preview img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+/* ---- 부분 수정(브러시) 창 ---- */
+#emomix-full .inpaint-pro {
+  display: grid;
+  gap: 12px;
+}
+#emomix-full .inpaint-stage {
+  position: relative;
+  width: min(100%, 420px);
+  margin: 0 auto;
+  background: repeating-conic-gradient(#e9eff8 0 25%, #fff 0 50%) 0 0 / 16px 16px;
+  border-radius: 12px;
+  overflow: hidden;
+  line-height: 0;
+}
+#emomix-full .inpaint-stage img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+#emomix-full .inpaint-stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+}
+#emomix-full .inpaint-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+#emomix-full .inpaint-tools label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-weight: 500;
+}
+#emomix-full .inpaint-tools .tabs {
+  margin: 0;
+}
+
+/* ---- 모바일 하단 탭바 ---- */
+#emomix-full .tabbar {
+  display: none;
+}
+@media (max-width: 760px) {
+  #emomix-full {
+    padding-bottom: 62px;
+  }
+  #emomix-full header nav,
+  #emomix-full aside {
+    display: none !important;
+  }
+  #emomix-full .tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    background: #fff;
+    border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  #emomix-full .tabbar button {
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+    padding: 8px 0 6px;
+    min-height: 56px;
+    background: none;
+    border-radius: 0;
+    font-size: 11px;
+    color: #4a617d;
+  }
+  #emomix-full .tabbar [aria-current='page'] {
+    color: var(--blue);
+    background: #eaf2ff;
+  }
+  #emomix-full .toasts {
+    bottom: 70px;
+  }
+  #emomix-full .thumbs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+}

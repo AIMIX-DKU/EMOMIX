@@ -6,9 +6,13 @@ import {
   ShoppingBag,
   ImagePlus,
   Wallet,
+  Sparkles,
+  Users,
+  User,
 } from 'lucide';
 import { createLiveApp } from './live.js';
 import { createShell } from './shell.js';
+import { enhanceFileInputs } from './uploads.js';
 import { api } from './api.js';
 import { DISCORD_PATH } from './icons.js';
 import { createUI, heading, panel, h } from './service-ui.js';
@@ -21,21 +25,56 @@ import { createAdmin } from './admin-features.js';
 
 const root = document.getElementById('emomix-full'),
   main = root.querySelector('main'),
-  notice = root.querySelector('.notice');
+  toasts = root.querySelector('.toasts');
 let route = 'studio',
   params = {};
-function notify(message) {
-  notice.textContent = message;
-  notice.hidden = false;
+// 화면 구석에 잠깐 떴다 사라지는 알림. type 을 안 주면 문구로 오류인지 짐작한다.
+const ERROR_HINT = /실패|오류|못했|못해|부족|올바르지|초과|권한이 없|불가/;
+function notify(message, type) {
+  const kind = type || (ERROR_HINT.test(message) ? 'error' : 'ok');
+  const toast = document.createElement('div');
+  toast.className = 'toast ' + kind;
+  toast.textContent = message;
+  toast.addEventListener('click', () => toast.remove());
+  toasts.append(toast);
+  while (toasts.children.length > 3) toasts.firstElementChild.remove();
+  setTimeout(() => toast.remove(), kind === 'error' ? 7000 : 3500);
 }
 function icons() {
   createIcons({
-    icons: { Bell, FolderHeart, Clock3, ShoppingBag, ImagePlus, Wallet },
+    icons: {
+      Bell,
+      FolderHeart,
+      Clock3,
+      ShoppingBag,
+      ImagePlus,
+      Wallet,
+      Sparkles,
+      Users,
+      User,
+    },
     attrs: { width: 15, height: 15 },
   });
 }
+// 이미지가 다 받아지면 로딩 표시를 걷고, 실패하면 빈 자리 안내로 바꾼다.
+root.addEventListener(
+  'load',
+  (event) => event.target.classList?.remove('is-loading'),
+  true,
+);
+root.addEventListener(
+  'error',
+  (event) => {
+    const img = event.target;
+    if (img.tagName !== 'IMG' || !img.classList.contains('live-image')) return;
+    img.outerHTML =
+      '<div class="img-empty"><span aria-hidden="true">🖼</span><small>이미지를 불러오지 못했어요</small></div>';
+  },
+  true,
+);
 const ui = createUI(root, go, notify);
 const shell = createShell(root);
+enhanceFileInputs(root);
 const live = createLiveApp({
   root,
   navigate(page, keep) {
@@ -100,11 +139,16 @@ const routes = {
 function profileLinks() {
   return (
     '<div class="row space">' +
+    ui.link('지갑·충전', 'wallet') +
+    ui.link('생성 내역', 'jobs') +
+    ui.link('구매·후원', 'orders') +
+    ui.link('구독 관리', 'subscription') +
+    ui.link('창작자 센터', 'creator') +
+    (shell.user?.role === 'ADMIN' ? ui.link('관리자', 'admin') : '') +
     ui.link('계정·보안', 'security') +
     ui.link('알림 설정', 'settings') +
     ui.link('약관·탈퇴', 'agreements') +
     ui.link('내 신고 내역', 'reports') +
-    ui.link('구독 관리', 'subscription') +
     '</div>'
   );
 }
@@ -118,7 +162,6 @@ async function go(page = 'studio', values = {}, record = true) {
   const volatile = ['auth', 'payment', 'discord-signup'];
   shell.refresh(volatile.includes(leaving) || volatile.includes(page));
   params = values;
-  notice.hidden = true;
   if (record) {
     const hash = new URLSearchParams({
       page,

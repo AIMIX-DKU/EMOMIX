@@ -51,7 +51,7 @@
         </aside>
         <main id="mix-content" aria-label="EmoMix 화면"></main>
       </div>
-      <p class="notice" role="status" hidden></p>
+      <div class="toasts" role="status" aria-live="polite"></div>
       <section
         class="overlay"
         role="dialog"
@@ -67,6 +67,13 @@
           <div class="modal-body"></div>
         </div>
       </section>
+      <nav class="tabbar" aria-label="주요 메뉴">
+        <button data-go="studio"><i data-lucide="sparkles" aria-hidden="true"></i><span>만들기</span></button
+        ><button data-go="library"><i data-lucide="folder-heart" aria-hidden="true"></i><span>보관함</span></button
+        ><button data-go="community"><i data-lucide="users" aria-hidden="true"></i><span>커뮤니티</span></button
+        ><button data-go="market"><i data-lucide="shopping-bag" aria-hidden="true"></i><span>마켓</span></button
+        ><button data-go="profile"><i data-lucide="user" aria-hidden="true"></i><span>내 정보</span></button>
+      </nav>
       <footer>
         <b>EmoMix</b><span>by AIMIX</span>
         <div class="foot-links"><button data-go="terms">이용약관</button
