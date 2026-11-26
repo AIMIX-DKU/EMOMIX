@@ -650,3 +650,55 @@ body {
 #emomix-full .live-terms .terms {
   white-space: pre-wrap;
 }
+
+#emomix-full .inpaint-area {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  background: #edf5ff;
+  touch-action: none;
+}
+#emomix-full .inpaint-area .live-image {
+  width: 100%;
+  max-height: none;
+}
+#emomix-full .inpaint-area canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.55;
+}
+#emomix-full .grid > .panel {
+  min-width: 0;
+}
+#emomix-full main > .panel {
+  margin-block: 14px;
+}
+#emomix-full .terms {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#emomix-full .live-image {
+  margin-inline: auto;
+}
+#emomix-full main .row {
+  overflow-wrap: anywhere;
+}
+#emomix-full main > .grid {
+  margin-top: 14px;
+}
+#emomix-full .panel select,
+#emomix-full .panel textarea {
+  max-width: 100%;
+}
+#emomix-full a.secondary {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 9px;
+  color: #235dde;
+  background: #edf4ff;
+  text-decoration: none;
+}

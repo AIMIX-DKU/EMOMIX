@@ -765,6 +765,9 @@ export function createLiveApp({ root, navigate, notify }) {
     });
   return {
     render,
+    openCharacter(characterId) {
+      return action('character-' + characterId);
+    },
     load,
     invalidate() {
       ++revision;
