@@ -143,12 +143,12 @@ export class GenerationService {
   }
 
   async view(job: GenerationJob) {
-    const result = job.result as { images?: { id: string; key: string }[] } | null;
+    const result = job.result as { images?: { id: string; key: string; thumb?: string | null }[] } | null;
     return {
       jobId: job.id, type: job.type, status: job.status, queuePosition: await this.queuePosition(job), progress: job.progress,
       creditCost: job.creditCost, targetType: job.targetType, targetId: job.targetId,
-      result: job.status === 'SUCCEEDED' && result?.images
-        ? { images: await Promise.all(result.images.map(async (i) => ({ id: i.id, imageUrl: await this.storage.getUrl(i.key) }))) }
+      result: result?.images?.length
+        ? { images: await Promise.all(result.images.map(async (i) => ({ id: i.id, imageUrl: await this.storage.getUrl(i.key), thumbnailUrl: await this.storage.getUrl(i.thumb ?? i.key) }))) }
         : null,
       errorCode: job.errorCode, createdAt: job.createdAt, startedAt: job.startedAt, finishedAt: job.finishedAt,
     };

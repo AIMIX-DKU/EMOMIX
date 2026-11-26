@@ -157,6 +157,17 @@ export function worker(app: INestApplication) {
       }
       return call(`/${jobId}/complete`, { images });
     },
+    /** 이미지 n 장을 올리고 partial 로 먼저 전달한다(complete 는 부르지 않는다). */
+    async partial(jobId: string, n: number, labels: (string | undefined)[] = [], png: Buffer = PNG) {
+      const u = await call(`/${jobId}/upload-urls`, { count: n });
+      const images = [];
+      for (const [i, up] of (u.body.data.uploads as { uploadKey: string; uploadUrl: string }[]).entries()) {
+        const put = await fetch(up.uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: png });
+        if (!put.ok) throw new Error('결과 업로드 실패 ' + put.status);
+        images.push({ uploadKey: up.uploadKey, label: labels[i] });
+      }
+      return call(`/${jobId}/partial`, { images });
+    },
   };
 }
 

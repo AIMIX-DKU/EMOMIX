@@ -74,6 +74,22 @@ loop:
 ```
 `label` 은 `EMOTION_SET` 에서 `params.items[].label` 과 같은 값을 넣습니다(생략하면 순서대로 매칭). 서버가 파일이 실제 이미지인지 검사하고, 크레딧을 확정합니다. **요청한 장수보다 적게 돌아오면 돌아온 장수만큼만 과금**하고 나머지는 반환합니다(못 만든 이모티콘은 실패 상태가 되어 사용자가 재생성할 수 있습니다).
 
+### 3-1. 한 장씩 먼저 보여주기 (권장: 캐릭터 후보 · 감정 세트)
+
+이미지가 만들어지는 대로 `POST /worker/jobs/{jobId}/partial` 로 먼저 보내면 사용자 화면에 **완성된 순서대로** 나타납니다. 업로드 방법은 위와 같고(`upload-urls` → PUT), 마지막 호출만 `complete` 대신 `partial` 입니다.
+
+```json
+{ "images": [ { "uploadKey": "…", "label": "happy" } ], "progress": 40 }
+```
+
+- 응답: `{ "jobId": "…", "delivered": 1 }` (지금까지 전달된 총 장수)
+- `partial` 은 heartbeat 역할도 합니다(임대가 연장됨).
+- **마지막에는 반드시 `complete` 를 호출**합니다. 이미 `partial` 로 보낸 이미지는 다시 보내지 않고 **남은 이미지만** `images` 에 담습니다. 전부 `partial` 로 보냈다면 `{ "images": [] }` 로 끝내면 됩니다.
+- `CHARACTER_CANDIDATES`, `EMOTION_SET` 에서만 쓸 수 있습니다(재생성·인페인트는 결과가 1장이라 `complete` 만).
+- 목록용 썸네일(최대 384px)은 서버가 자동으로 만듭니다. 워커는 신경 쓰지 않아도 됩니다.
+- 일부만 보내고 `fail` 을 호출하거나 임대가 끝나면, **전달된 장수만큼만 과금**하고 나머지는 반환합니다.
+- `partial` 을 쓰지 않아도 기존처럼 `complete` 한 번으로 끝낼 수 있습니다.
+
 ## 4. 실패 보고
 
 `POST /worker/jobs/{jobId}/fail`

@@ -7,7 +7,7 @@ import { NotifyService } from '../common/notify.service.js';
 import { StorageService } from '../common/storage.service.js';
 import { parse, z } from '../common/validate.js';
 import { consumeCredits, releaseCredits } from '../common/wallet.js';
-import { compositeInpaint } from '../emoticon/image-convert.js';
+import { compositeInpaint, makeThumb } from '../emoticon/image-convert.js';
 import type { JobWork } from '../generation/generation.service.js';
 import { PrismaService } from '../prisma.service.js';
 import { sniffImage } from '../upload/image.js';
@@ -15,6 +15,13 @@ import { sniffImage } from '../upload/image.js';
 const LEASE_MS = 120_000;
 const MAX_ATTEMPTS = 3;
 type Work = JobWork & { originalKey?: string };
+type ResultImage = { id: string; key: string; thumb?: string | null };
+const imageSchema = z.object({ uploadKey: z.string(), label: z.string().max(30).optional() });
+/** 요청 장수보다 적게 돌아오면 돌아온 만큼만 과금한다. */
+const billedFor = (job: GenerationJob, work: Work, delivered: number) => {
+  const wanted = Math.max(work.count ?? work.items?.length ?? delivered, 1);
+  return Math.min(job.creditCost, Math.round((job.creditCost * delivered) / wanted));
+};
 
 /** GPU 서버 전용 API(pull 방식). 인증은 쿠키가 아니라 X-Worker-Key. */
 @Controller('worker/jobs')
@@ -102,77 +109,125 @@ export class WorkerController {
     return { uploads };
   }
 
-  @Post(':jobId/complete') @HttpCode(200) @Access('worker')
-  async complete(@Param('jobId') jobId: string, @Body() body: unknown) {
-    const b = parse(
-      z.object({ images: z.array(z.object({ uploadKey: z.string(), label: z.string().max(30).optional() })).min(1).max(32), workerId: z.string().optional() }),
-      body,
-    );
-    const job = await this.leased(jobId, b.workerId);
-    const work = job.params as unknown as Work;
-    if (b.images.some((i) => !i.uploadKey.startsWith(`generated/${jobId}/`))) throw new ApiError('VALIDATION_ERROR', '이 작업의 업로드 키가 아닙니다.');
-
-    // 파일 검증(실제로 올라왔는지, 이미지인지)
-    const images: { key: string; label?: string }[] = await Promise.all(
-      b.images.map(async (i) => {
+  /** 업로드된 파일이 이 작업의 것이고 실제 이미지인지 확인한다. */
+  private async verify(jobId: string, list: { uploadKey: string; label?: string }[]) {
+    if (list.some((i) => !i.uploadKey.startsWith(`generated/${jobId}/`))) throw new ApiError('VALIDATION_ERROR', '이 작업의 업로드 키가 아닙니다.');
+    return Promise.all(
+      list.map(async (i) => {
         const bytes = await this.storage.readBytes(i.uploadKey).catch(() => null);
         if (!bytes) throw new ApiError('VALIDATION_ERROR', `업로드되지 않은 파일입니다: ${i.uploadKey}`);
         if (!sniffImage(bytes)) throw new ApiError('VALIDATION_ERROR', '이미지 파일이 아닙니다.');
-        return { key: i.uploadKey, label: i.label };
+        return { key: i.uploadKey, label: i.label, thumb: await this.thumbOf(i.uploadKey, jobId, bytes) };
       }),
     );
+  }
+
+  /** 목록용 작은 이미지를 만든다. 실패해도 원본만으로 동작하므로 null 을 돌려준다. */
+  private async thumbOf(sourceKey: string, jobId: string, bytes?: Buffer | null): Promise<string | null> {
+    try {
+      const src = bytes ?? (await this.storage.readBytes(sourceKey));
+      const key = `thumb/${jobId}/${randomUUID()}.webp`;
+      await this.storage.put(key, await makeThumb(src), 'image/webp');
+      return key;
+    } catch {
+      return null;
+    }
+  }
+
+  /** 검증된 이미지를 결과 레코드(후보·이모티콘 버전)로 저장한다. prev 는 이미 전달된 결과. */
+  private async record(tx: Prisma.TransactionClient, job: GenerationJob, work: Work, images: { key: string; label?: string; thumb?: string | null }[], prev: ResultImage[]) {
+    const out: ResultImage[] = [];
+    if (job.type === 'CHARACTER_CANDIDATES') {
+      for (const i of images) {
+        const c = await tx.characterCandidate.create({ data: { characterId: job.targetId, jobId: job.id, imageKey: i.key } });
+        out.push({ id: c.id, key: i.key, thumb: i.thumb ?? null });
+      }
+    } else if (job.type === 'EMOTION_SET') {
+      const items = work.items ?? [];
+      const done = new Set(prev.map((p) => p.id));
+      for (const [idx, i] of images.entries()) {
+        const item = items.find((x) => x.label === i.label && !done.has(x.emoticonId)) ?? items[prev.length + idx];
+        if (!item || done.has(item.emoticonId)) continue;
+        done.add(item.emoticonId);
+        const v = await tx.emoticonVersion.create({ data: { emoticonId: item.emoticonId, version: 1, imageKey: i.key, thumbKey: i.thumb ?? null, jobId: job.id, source: 'GENERATED' } });
+        await tx.emoticon.update({ where: { id: item.emoticonId }, data: { currentVersionId: v.id, status: 'READY' } });
+        out.push({ id: item.emoticonId, key: i.key, thumb: i.thumb ?? null });
+      }
+    } else {
+      const last = await tx.emoticonVersion.findFirst({ where: { emoticonId: job.targetId }, orderBy: { version: 'desc' } });
+      const v = await tx.emoticonVersion.create({
+        data: {
+          emoticonId: job.targetId, version: (last?.version ?? 0) + 1, imageKey: images[0].key, thumbKey: images[0].thumb ?? null, jobId: job.id,
+          source: job.type === 'INPAINT' ? 'INPAINTED' : 'REGENERATED',
+        },
+      });
+      out.push({ id: v.id, key: images[0].key, thumb: images[0].thumb ?? null });
+    }
+    return out;
+  }
+
+  /** 일부 결과를 먼저 보낸다(후보·세트 생성 전용). 작업은 계속 RUNNING 이고 임대가 연장된다. */
+  @Post(':jobId/partial') @HttpCode(200) @Access('worker')
+  async partial(@Param('jobId') jobId: string, @Body() body: unknown) {
+    const b = parse(
+      z.object({ images: z.array(imageSchema).min(1).max(32), progress: z.number().int().min(0).max(100).optional(), workerId: z.string().optional() }),
+      body,
+    );
+    const job = await this.leased(jobId, b.workerId);
+    if (job.type !== 'CHARACTER_CANDIDATES' && job.type !== 'EMOTION_SET') throw new ApiError('VALIDATION_ERROR', '일부 결과는 캐릭터 후보·세트 생성 작업에서만 보낼 수 있습니다.');
+    const images = await this.verify(jobId, b.images);
+    const delivered = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "GenerationJob" WHERE id = ${job.id} FOR UPDATE`;
+      const cur = await tx.generationJob.findUnique({ where: { id: job.id } });
+      if (!cur || cur.status !== 'RUNNING') throw new ApiError('LEASE_EXPIRED');
+      const prev = (cur.result as { images?: ResultImage[] } | null)?.images ?? [];
+      const all = [...prev, ...(await this.record(tx, job, job.params as unknown as Work, images, prev))];
+      await tx.generationJob.update({
+        where: { id: job.id },
+        data: { result: { images: all } as unknown as Prisma.InputJsonValue, leaseExpiresAt: new Date(Date.now() + LEASE_MS), ...(b.progress !== undefined ? { progress: b.progress } : {}) },
+      });
+      return all.length;
+    });
+    await this.seen();
+    return { jobId: job.id, delivered };
+  }
+
+  @Post(':jobId/complete') @HttpCode(200) @Access('worker')
+  async complete(@Param('jobId') jobId: string, @Body() body: unknown) {
+    const b = parse(z.object({ images: z.array(imageSchema).max(32).default([]), workerId: z.string().optional() }), body);
+    const job = await this.leased(jobId, b.workerId);
+    const work = job.params as unknown as Work;
+    const images = await this.verify(jobId, b.images);
 
     // 인페인트: 마스크 밖은 원본 픽셀로 되돌려 합성한다
-    if (job.type === 'INPAINT' && work.maskKey && work.originalKey) {
+    if (job.type === 'INPAINT' && work.maskKey && work.originalKey && images[0]) {
       const merged = await compositeInpaint(
         await this.storage.readBytes(work.originalKey), await this.storage.readBytes(images[0].key), await this.storage.readBytes(work.maskKey),
       );
       const key = `generated/${jobId}/${randomUUID()}.png`;
       await this.storage.put(key, merged, 'image/png');
-      images[0] = { key };
+      images[0] = { key, label: undefined, thumb: await this.thumbOf(key, jobId, merged) };
     }
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "GenerationJob" WHERE id = ${job.id} FOR UPDATE`;
+      const cur = await tx.generationJob.findUnique({ where: { id: job.id } });
+      const prev = (cur?.result as { images?: ResultImage[] } | null)?.images ?? [];
+      if (!images.length && !prev.length) throw new ApiError('VALIDATION_ERROR', '결과 이미지가 없습니다.');
       const claimed = await tx.generationJob.updateMany({ where: { id: job.id, status: 'RUNNING' }, data: { status: 'SUCCEEDED', progress: 100, finishedAt: new Date() } });
       if (claimed.count !== 1) throw new ApiError('LEASE_EXPIRED');
-      const out: { id: string; key: string }[] = [];
-
-      if (job.type === 'CHARACTER_CANDIDATES') {
-        for (const i of images) {
-          const c = await tx.characterCandidate.create({ data: { characterId: job.targetId, jobId: job.id, imageKey: i.key } });
-          out.push({ id: c.id, key: i.key });
-        }
-      } else if (job.type === 'EMOTION_SET') {
-        const items = work.items ?? [];
-        for (const [idx, i] of images.entries()) {
-          const item = items.find((x) => x.label === i.label) ?? items[idx];
-          if (!item) continue;
-          const v = await tx.emoticonVersion.create({ data: { emoticonId: item.emoticonId, version: 1, imageKey: i.key, jobId: job.id, source: 'GENERATED' } });
-          await tx.emoticon.update({ where: { id: item.emoticonId }, data: { currentVersionId: v.id, status: 'READY' } });
-          out.push({ id: item.emoticonId, key: i.key });
-        }
+      const all = [...prev, ...(images.length ? await this.record(tx, job, work, images, prev) : [])];
+      if (job.type === 'EMOTION_SET') {
         // 결과가 오지 않은 항목은 실패로 표시한다
-        await tx.emoticon.updateMany({ where: { id: { in: items.map((x) => x.emoticonId) }, status: 'GENERATING' }, data: { status: 'FAILED' } });
-      } else {
-        const last = await tx.emoticonVersion.findFirst({ where: { emoticonId: job.targetId }, orderBy: { version: 'desc' } });
-        const v = await tx.emoticonVersion.create({
-          data: {
-            emoticonId: job.targetId, version: (last?.version ?? 0) + 1, imageKey: images[0].key, jobId: job.id,
-            source: job.type === 'INPAINT' ? 'INPAINTED' : 'REGENERATED',
-          },
-        });
-        out.push({ id: v.id, key: images[0].key });
+        await tx.emoticon.updateMany({ where: { id: { in: (work.items ?? []).map((x) => x.emoticonId) }, status: 'GENERATING' }, data: { status: 'FAILED' } });
       }
-      await tx.generationJob.update({ where: { id: job.id }, data: { result: { images: out } as Prisma.InputJsonValue } });
+      await tx.generationJob.update({ where: { id: job.id }, data: { result: { images: all } as unknown as Prisma.InputJsonValue } });
       // 요청한 장수보다 적게 돌아오면 돌아온 만큼만 과금하고 나머지 예약분은 돌려준다
-      const wanted = Math.max(work.count ?? out.length, 1);
-      const used = Math.min(job.creditCost, Math.round((job.creditCost * out.length) / wanted));
+      const used = billedFor(job, work, all.length);
       await consumeCredits(tx, job.userId, used, job.id);
       if (job.creditCost - used > 0) await releaseCredits(tx, job.userId, job.creditCost - used, job.id);
-      return out;
     });
     await this.notify.send(job.userId, { kind: 'generation', type: 'GENERATION_DONE', title: '이모티콘 생성이 완료되었습니다.', targetType: 'JOB', targetId: job.id });
-    void result;
     return { jobId: job.id, status: 'SUCCEEDED' };
   }
 
@@ -197,7 +252,10 @@ export class WorkerController {
         where: { id: job.id, status: { in: ['RUNNING', 'QUEUED'] } }, data: { status, errorCode, finishedAt: new Date() },
       });
       if (r.count !== 1) return;
-      await releaseCredits(tx, job.userId, job.creditCost, job.id);
+      const delivered = ((job.result as { images?: ResultImage[] } | null)?.images ?? []).length;
+      const used = delivered ? billedFor(job, job.params as unknown as Work, delivered) : 0;
+      if (used > 0) await consumeCredits(tx, job.userId, used, job.id);
+      if (job.creditCost - used > 0) await releaseCredits(tx, job.userId, job.creditCost - used, job.id);
       const ids = ((job.params as unknown as Work).items ?? []).map((i) => i.emoticonId);
       if (job.type === 'EMOTION_SET') await tx.emoticon.updateMany({ where: { id: { in: ids }, status: 'GENERATING' }, data: { status: 'FAILED' } });
     });
