@@ -7,9 +7,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test api.test.js workflow.test.js",
-    "test:live": "node scripts/live-smoke.mjs"
+    "test:live": "node scripts/live-smoke.mjs",
+    "test:editor": "node scripts/character-editor.browser.cjs"
   },
   "devDependencies": {
+    "playwright": "^1.65.1",
+    "pngjs": "^7.0.0",
     "vite": "^8.3.8"
   },
   "dependencies": {
