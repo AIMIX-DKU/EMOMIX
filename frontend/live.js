@@ -1,3 +1,4 @@
+import { createMaskEditor } from './mask-editor.js';
 import { api, initializeCsrf, uploadImage } from './api.js';
 
 const escape = (value) =>
@@ -53,6 +54,12 @@ export function createLiveApp({ root, navigate, notify }) {
     character = null,
     candidates = [],
     chosen = 0;
+  let generationCount = 1,
+    batchIds = [];
+  const maskEditor = createMaskEditor();
+  let editPrompt = '',
+    editMode = 'partial',
+    editRequest = null;
   let busy = false,
     job = null,
     jobMessage = '',
@@ -160,32 +167,103 @@ export function createLiveApp({ root, navigate, notify }) {
       '<label>그림체<select name="style" required>' +
       options +
       '</select></label><label class="upload">참고 이미지 추가<input name="reference" type="file" accept="image/png,image/jpeg,image/webp"></label>' +
-      '<p class="muted">후보 3장 · 생성 전 서버에서 비용을 확인해요.</p><button class="primary" type="submit" ' +
+      '<label>생성 장수<select name="count">' +
+      [1, 2, 3]
+        .map(
+          (count) =>
+            '<option value="' +
+            count +
+            '" ' +
+            (generationCount === count ? 'selected' : '') +
+            '>' +
+            count +
+            '장</option>',
+        )
+        .join('') +
+      '</select></label><p class="muted">1~3장 중 선택하고, 마음에 드는 결과를 계속 수정해요.</p><button class="primary" type="submit" ' +
       (busy || !styles.length ? 'disabled' : '') +
-      '>후보 생성 비용 확인</button></form>' +
+      '>이모티콘 만들기</button></form>' +
       '<section class="panel stack"><h2>캐릭터 미리보기</h2><p class="live-job" role="status">' +
       escape(jobMessage) +
       '</p>' +
       (candidates.length
-        ? '<div class="thumbs">' +
-          candidates
-            .map(
-              (item, index) =>
-                '<button data-live="choose-' +
-                index +
-                '" aria-pressed="' +
-                (chosen === index) +
-                '">' +
-                image(item.imageUrl, '캐릭터 후보 ' + (index + 1)) +
-                '</button>',
-            )
-            .join('') +
-          '</div><div class="row">' +
+        ? (batchIds.length > 1
+            ? '<div class="thumbs result-choices" aria-label="수정할 결과 선택">' +
+              batchIds
+                .map((imageId, index) => {
+                  const candidateIndex = candidates.findIndex(
+                    (c) => c.imageId === imageId,
+                  );
+                  const item = candidates[candidateIndex];
+                  return item
+                    ? '<button type="button" data-live="choose-' +
+                        candidateIndex +
+                        '" aria-label="결과 ' +
+                        (index + 1) +
+                        ' 선택" aria-pressed="' +
+                        (chosen === candidateIndex) +
+                        '">' +
+                        image(item.imageUrl, '결과 ' + (index + 1)) +
+                        '</button>'
+                    : '';
+                })
+                .join('') +
+              '</div>'
+            : '') +
+          '<div class="character-result"><div class="character-mask-stage" data-character-mask>' +
+          image(candidates[chosen].imageUrl, '현재 캐릭터 결과') +
+          (editMode === 'partial'
+            ? '<canvas aria-label="수정할 부분을 마우스나 손가락으로 칠하세요."></canvas>'
+            : '') +
+          '</div></div><div class="row">' +
           button('이 캐릭터 확정', 'confirm', true) +
           button('PNG 다운로드', 'download') +
-          button('건너뛰기', 'skip') +
-          '</div>'
-        : '<div class="empty">설명을 입력하고 후보를 만들어 보세요.</div>') +
+          button('결과 지우기', 'skip') +
+          '</div><form class="stack character-edit" data-live-form="edit"><h3>결과 수정하기</h3><div class="row">' +
+          '<button type="button" data-live="edit-partial" aria-pressed="' +
+          (editMode === 'partial') +
+          '">부분 수정</button>' +
+          '<button type="button" data-live="edit-whole" aria-pressed="' +
+          (editMode === 'whole') +
+          '">전체 수정</button></div>' +
+          (editMode === 'partial'
+            ? '<p class="muted" data-mask-status>수정할 부분을 이미지 위에 칠해 주세요.</p><div class="row mask-tools"><button type="button" data-mask-tool="paint">영역 칠하기</button><button type="button" data-mask-tool="erase">선택 지우개</button><button type="button" data-mask-clear>선택 초기화</button><label>붓 크기<input type="range" data-mask-size min="8" max="90" value="28"></label></div>'
+            : '<p class="muted">현재 결과를 참고해 전체 이미지를 다시 수정해요.</p>') +
+          '<label>어떻게 바꿀까요?<textarea name="editPrompt" maxlength="300" rows="3" required placeholder="예시) 선택한 눈을 웃는 눈으로 바꿔줘">' +
+          escape(editPrompt) +
+          '</textarea></label>' +
+          '<button type="submit" class="primary" ' +
+          (busy ||
+          editRequest ||
+          (job && ['QUEUED', 'RUNNING'].includes(job.status))
+            ? 'disabled'
+            : '') +
+          '>수정 비용 확인</button></form>' +
+          (editRequest && !busy
+            ? button('같은 수정 요청 다시 확인', 'retry-edit')
+            : '') +
+          (candidates.length > 1
+            ? '<details class="character-history"><summary>수정 기록 (' +
+              candidates.length +
+              ')</summary><div class="thumbs">' +
+              candidates
+                .map(
+                  (item, index) =>
+                    '<button data-live="choose-' +
+                    index +
+                    '" aria-pressed="' +
+                    (chosen === index) +
+                    '">' +
+                    image(
+                      item.imageUrl,
+                      '수정 기록 ' + (candidates.length - index),
+                    ) +
+                    '</button>',
+                )
+                .join('') +
+              '</div></details>'
+            : '')
+        : '<div class="empty">설명을 입력하면 결과 1장이 여기에 표시돼요.</div>') +
       (job && ['QUEUED', 'RUNNING'].includes(job.status)
         ? '<div class="row">' +
           button('상태 다시 확인', 'resume') +
@@ -259,7 +337,10 @@ export function createLiveApp({ root, navigate, notify }) {
       return null;
     page = pageName;
     tab = tabName;
-    if (page === 'studio') return studioView();
+    if (page === 'studio') {
+      queueMicrotask(mountMask);
+      return studioView();
+    }
     if (page === 'auth') return authView();
     return panel(
       '불러오는 중이에요',
@@ -281,6 +362,7 @@ export function createLiveApp({ root, navigate, notify }) {
           styles = (await api('/style-presets')).items;
           if (token !== revision) return;
           main.innerHTML = studioView();
+          mountMask();
         }
         return;
       }
@@ -403,8 +485,16 @@ export function createLiveApp({ root, navigate, notify }) {
       : '<p class="muted">내역이 없어요.</p>';
   }
 
+  function mountMask() {
+    if (candidates[chosen] && editMode === 'partial')
+      maskEditor.mount(main, candidates[chosen].imageId);
+  }
+
   function repaintJob() {
-    if (page === 'studio') main.innerHTML = studioView();
+    if (page === 'studio') {
+      main.innerHTML = studioView();
+      mountMask();
+    }
   }
 
   async function checkJob() {
@@ -420,13 +510,20 @@ export function createLiveApp({ root, navigate, notify }) {
             : job.status === 'SUCCEEDED'
               ? '생성이 완료됐어요.'
               : '작업 종료 · ' + (job.errorCode || job.status);
-      if (job.status === 'SUCCEEDED' && job.type === 'CHARACTER_CANDIDATES') {
+      if (job.status === 'SUCCEEDED' && job.targetType === 'CHARACTER') {
         const id = job.targetId || character?.id;
         character = await api('/characters/' + encodeURIComponent(id));
         candidates = (
           await api('/characters/' + encodeURIComponent(id) + '/candidates')
         ).items;
-        chosen = 0;
+        batchIds = (job.result?.images || []).map((item) => item.id);
+        const resultId = job.result?.images?.[0]?.id;
+        chosen = Math.max(
+          0,
+          candidates.findIndex((item) => item.imageId === resultId),
+        );
+        editPrompt = '';
+        editRequest = null;
       }
       repaintJob();
       if (['QUEUED', 'RUNNING'].includes(job.status))
@@ -449,11 +546,29 @@ export function createLiveApp({ root, navigate, notify }) {
           '/candidates',
         {
           method: 'POST',
-          body: { count: 3 },
+          body: { count: request.count },
           idempotencyKey: request.key,
         },
       );
       request = null;
+      await checkJob();
+    } finally {
+      busy = false;
+      repaintJob();
+    }
+  }
+
+  async function submitEdit() {
+    if (!editRequest) return;
+    busy = true;
+    repaintJob();
+    try {
+      job = await api(editRequest.path, {
+        method: 'POST',
+        body: editRequest.body,
+        idempotencyKey: editRequest.key,
+      });
+      editRequest = null;
       await checkJob();
     } finally {
       busy = false;
@@ -524,17 +639,83 @@ export function createLiveApp({ root, navigate, notify }) {
       notify('프로필을 저장했어요.');
       return;
     }
+    if (kind === 'edit') {
+      if (
+        request ||
+        editRequest ||
+        (job && ['QUEUED', 'RUNNING'].includes(job.status))
+      )
+        throw Error('진행 중인 요청을 먼저 확인해 주세요.');
+      const source = candidates[chosen];
+      if (!source || !character)
+        throw Error('수정할 결과를 먼저 생성해 주세요.');
+      editPrompt = String(new FormData(form).get('editPrompt')).trim();
+      if (!editPrompt) throw Error('수정 내용을 입력해 주세요.');
+      const file = editMode === 'partial' ? await maskEditor.file() : null;
+      const estimate = await api('/generations/estimates', {
+        method: 'POST',
+        body: {
+          type: editMode === 'partial' ? 'INPAINT' : 'CHARACTER_CANDIDATES',
+          count: 1,
+        },
+      });
+      if (!estimate.sufficient)
+        throw Error(
+          '크레딧이 부족해요. 필요 ' +
+            estimate.creditCost +
+            ' / 보유 ' +
+            estimate.creditBalance,
+        );
+      if (
+        !window.confirm(
+          '현재 결과 1장을 수정하는 데 ' +
+            estimate.creditCost +
+            ' 크레딧이 필요해요. 수정할까요?',
+        )
+      )
+        return;
+      busy = true;
+      try {
+        const maskUploadId = file
+          ? (await uploadImage(file, 'MASK')).uploadId
+          : undefined;
+        editRequest = {
+          path:
+            '/characters/' +
+            encodeURIComponent(character.id) +
+            (file ? '/inpaints' : '/regenerations'),
+          body: {
+            sourceCandidateImageId: source.imageId,
+            prompt: editPrompt,
+            ...(maskUploadId ? { maskUploadId } : {}),
+          },
+          key: crypto.randomUUID(),
+        };
+        await submitEdit();
+      } finally {
+        busy = false;
+        repaintJob();
+      }
+      return;
+    }
     if (kind === 'generate') {
-      if (request || (job && ['QUEUED', 'RUNNING'].includes(job.status)))
+      if (
+        request ||
+        editRequest ||
+        (job && ['QUEUED', 'RUNNING'].includes(job.status))
+      )
         throw new Error('진행 중인 작업이나 기존 요청을 먼저 확인해 주세요.');
       await session();
       const data = new FormData(form);
       description = String(data.get('description')).trim();
       styleKey = data.get('style');
+      generationCount = Number(data.get('count'));
+      if (![1, 2, 3].includes(generationCount))
+        throw Error('생성 장수는 1~3장 중 선택해 주세요.');
       if (!description) throw new Error('캐릭터 설명을 입력해 주세요.');
       const estimate = await api('/generations/estimates', {
         method: 'POST',
-        body: { type: 'CHARACTER_CANDIDATES', count: 3 },
+        body: { type: 'CHARACTER_CANDIDATES', count: generationCount },
       });
       if (!estimate.sufficient)
         throw new Error(
@@ -547,7 +728,9 @@ export function createLiveApp({ root, navigate, notify }) {
       // Ask before reserving credits, after the server has calculated the current price.
       if (
         !window.confirm(
-          '후보 3장 생성에 ' +
+          '캐릭터 ' +
+            generationCount +
+            '장 생성에 ' +
             estimate.creditCost +
             ' 크레딧이 필요해요. 보유 ' +
             estimate.creditBalance +
@@ -571,9 +754,16 @@ export function createLiveApp({ root, navigate, notify }) {
         },
       });
       candidates = [];
+      batchIds = [];
+      editPrompt = '';
+      editRequest = null;
       job = null;
       chosen = 0;
-      request = { characterId: character.id, key: crypto.randomUUID() };
+      request = {
+        characterId: character.id,
+        key: crypto.randomUUID(),
+        count: generationCount,
+      };
       await submitGeneration();
     }
   }
@@ -590,6 +780,8 @@ export function createLiveApp({ root, navigate, notify }) {
       character = null;
       job = null;
       request = null;
+      editRequest = null;
+      editPrompt = '';
       clearTimeout(timer);
       updateHeader();
       navigate('auth');
@@ -627,13 +819,28 @@ export function createLiveApp({ root, navigate, notify }) {
       main.querySelector('.live-terms').append(text);
       return;
     }
+    if (name === 'edit-partial' || name === 'edit-whole') {
+      editMode = name === 'edit-partial' ? 'partial' : 'whole';
+      repaintJob();
+      return;
+    }
+    if (name === 'retry-edit') return submitEdit();
     if (name.startsWith('choose-')) {
       chosen = Number(name.slice(7));
       repaintJob();
       return;
     }
     if (name === 'skip') {
+      if (
+        editRequest ||
+        request ||
+        busy ||
+        (job && ['QUEUED', 'RUNNING'].includes(job.status))
+      )
+        throw Error('진행 중인 요청을 먼저 확인해 주세요.');
       candidates = [];
+      editPrompt = '';
+      editRequest = null;
       repaintJob();
       return;
     }
@@ -649,7 +856,13 @@ export function createLiveApp({ root, navigate, notify }) {
     }
     if (name === 'confirm') {
       const item = candidates[chosen];
-      if (!item || !character) throw new Error('후보를 선택해 주세요.');
+      if (!item || !character) throw new Error('결과를 먼저 생성해 주세요.');
+      if (
+        editRequest ||
+        busy ||
+        (job && ['QUEUED', 'RUNNING'].includes(job.status))
+      )
+        throw Error('진행 중인 수정을 먼저 완료해 주세요.');
       character = await api(
         '/characters/' + encodeURIComponent(character.id) + '/confirm',
         { method: 'POST', body: { candidateImageId: item.imageId } },
@@ -659,6 +872,15 @@ export function createLiveApp({ root, navigate, notify }) {
       return;
     }
     if (name.startsWith('character-')) {
+      if (
+        request ||
+        editRequest ||
+        (job && ['QUEUED', 'RUNNING'].includes(job.status))
+      )
+        throw Error('진행 중인 작업을 먼저 확인해 주세요.');
+      clearTimeout(timer);
+      job = null;
+      batchIds = [];
       character = await api(
         '/characters/' + encodeURIComponent(name.slice(10)),
       );
@@ -669,7 +891,15 @@ export function createLiveApp({ root, navigate, notify }) {
       ).items;
       description = character.description;
       styleKey = character.stylePreset;
-      chosen = 0;
+      chosen = Math.max(
+        0,
+        candidates.findIndex(
+          (item) =>
+            character.baseImageUrl &&
+            new URL(item.imageUrl, location.origin).pathname ===
+              new URL(character.baseImageUrl, location.origin).pathname,
+        ),
+      );
       navigate('studio');
       return;
     }
@@ -707,6 +937,9 @@ export function createLiveApp({ root, navigate, notify }) {
     }
   }
 
+  root.addEventListener('input', (event) => {
+    if (event.target.name === 'editPrompt') editPrompt = event.target.value;
+  });
   root.addEventListener(
     'click',
     async (event) => {

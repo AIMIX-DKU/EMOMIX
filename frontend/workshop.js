@@ -145,6 +145,7 @@ export function createWorkshop(ui) {
               },
             ),
           ) +
+          ui.link('이미지 수정·결과 선택', 'studio', { characterId: c.id }) +
           (c.status === 'CONFIRMED'
             ? ui.link('이 캐릭터로 세트 만들기', 'set-new', {
                 characterId: c.id,
