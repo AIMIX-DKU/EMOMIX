@@ -5,6 +5,7 @@ import { env } from '../config.js';
 import { PrismaService } from '../prisma.service.js';
 import { ApiError } from '../common/envelope.js';
 import { PolicyService } from '../common/policy.service.js';
+import { z } from '../common/validate.js';
 import { StorageService } from '../common/storage.service.js';
 import { startOfDay } from '../common/reward.service.js';
 import { reserveCredits, totalCredits } from '../common/wallet.js';
@@ -20,7 +21,19 @@ export type JobWork = {
   maskKey?: string;
   items?: { emoticonId: string; label: string; prompt: string }[];
   count: number;
+  /** 재현용 시드. 이미지마다 seed, seed+1, … 를 쓴다. */
+  seed?: number;
+  /** 넣고 싶지 않은 요소 */
+  negativePrompt?: string;
   [k: string]: unknown;
+};
+
+export const MAX_SEED = 2_147_483_647;
+export const newSeed = () => Math.floor(Math.random() * MAX_SEED);
+/** 생성 요청이 받는 선택 필드(시드, 넣고 싶지 않은 것). z 는 호출하는 쪽에서 넘긴다. */
+export const seedFields = {
+  seed: z.number().int().min(0).max(MAX_SEED).optional(),
+  negativePrompt: z.string().trim().max(300).optional(),
 };
 
 export interface JobSpec {
@@ -144,9 +157,11 @@ export class GenerationService {
 
   async view(job: GenerationJob) {
     const result = job.result as { images?: { id: string; key: string; thumb?: string | null }[] } | null;
+    const work = job.params as unknown as JobWork | null;
     return {
       jobId: job.id, type: job.type, status: job.status, queuePosition: await this.queuePosition(job), progress: job.progress,
       creditCost: job.creditCost, targetType: job.targetType, targetId: job.targetId,
+      seed: work?.seed ?? null, negativePrompt: work?.negativePrompt ?? null,
       result: result?.images?.length
         ? { images: await Promise.all(result.images.map(async (i) => ({ id: i.id, imageUrl: await this.storage.getUrl(i.key), thumbnailUrl: await this.storage.getUrl(i.thumb ?? i.key) }))) }
         : null,

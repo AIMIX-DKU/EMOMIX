@@ -221,6 +221,29 @@ describe('캐릭터·생성·워커·지갑·다운로드', () => {
     expect(job.result.images).toHaveLength(1);
   });
 
+  it('시드·넣고 싶지 않은 것: 저장되고 워커에 전달되며, 생략하면 서버가 시드를 정한다', async () => {
+    const { c } = await signedUp(app, ctx.mail);
+    const ch = (await c.post('/characters', { name: '곰', description: '갈색 곰', stylePreset: 'pastel' })).body.data.id;
+    expect((await idem(c, `/characters/${ch}/candidates`, { count: 2, seed: -1 })).body.errorCode).toBe('VALIDATION_ERROR');
+
+    const j = await idem(c, `/characters/${ch}/candidates`, { count: 2, seed: 12345, negativePrompt: '배경, 글자' });
+    expect(j.status).toBe(202);
+    expect(j.body.data).toMatchObject({ seed: 12345, negativePrompt: '배경, 글자' });
+    const claimed = await w.claimJob(j.body.data.jobId);
+    expect(claimed.params).toMatchObject({ seed: 12345, negativePrompt: '배경, 글자', seeds: [12345, 12346] });
+    await w.finish(j.body.data.jobId, 2);
+    expect((await c.get(`/generations/${j.body.data.jobId}`)).body.data.seed).toBe(12345);
+
+    // 시드를 안 보내면 서버가 정해서 저장한다(재현하려면 응답의 seed 를 쓴다)
+    const k = await idem(c, `/characters/${ch}/candidates`, { count: 1 });
+    const seed = k.body.data.seed as number;
+    expect(Number.isInteger(seed) && seed >= 0).toBe(true);
+    expect(k.body.data.negativePrompt).toBeNull();
+    const claimed2 = await w.claimJob(k.body.data.jobId);
+    expect(claimed2.params).toMatchObject({ seed, negativePrompt: '', seeds: [seed] });
+    await w.finish(k.body.data.jobId, 1);
+  });
+
   it('실패 보고는 크레딧을 반환하고 이모티콘을 FAILED 로, 대기 중 작업은 취소하면 즉시 반환', async () => {
     const { c } = await signedUp(app, ctx.mail);
     const ch = (await c.post('/characters', { name: '펭귄', description: '검정 펭귄', stylePreset: 'pixel' })).body.data.id;

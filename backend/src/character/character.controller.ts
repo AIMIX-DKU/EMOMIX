@@ -4,7 +4,7 @@ import { Access, CurrentUser, type Me } from '../common/access.js';
 import { ApiError } from '../common/envelope.js';
 import { StorageService } from '../common/storage.service.js';
 import { parse, pageOf, pageResult, z } from '../common/validate.js';
-import { GenerationService } from '../generation/generation.service.js';
+import { GenerationService, newSeed, seedFields } from '../generation/generation.service.js';
 import { PrismaService } from '../prisma.service.js';
 
 export const isPublishedSet = (setId: string, prisma: PrismaService) =>
@@ -124,7 +124,7 @@ export class CharacterController {
   @Post('characters/:id/candidates') @HttpCode(202) @Access('user')
   async candidates(@CurrentUser() me: Me, @Param('id') id: string, @Headers('idempotency-key') key: string | undefined, @Body() body: unknown) {
     const c = await this.own(me, id);
-    const b = parse(z.object({ count: z.number().int().min(1).max(4).optional(), extraPrompt: z.string().max(300).optional() }), body);
+    const b = parse(z.object({ count: z.number().int().min(1).max(4).optional(), extraPrompt: z.string().max(300).optional(), ...seedFields }), body);
     const count = b.count ?? 4;
     const style = await this.prisma.stylePreset.findFirst({ where: { key: c.stylePresetKey ?? '' } });
     const refs = await this.prisma.upload.findMany({ where: { id: { in: c.referenceUploadIds } } });
@@ -132,8 +132,8 @@ export class CharacterController {
     return this.gen.create({
       userId: me.id, idempotencyKey: key, type: 'CHARACTER_CANDIDATES', targetType: 'CHARACTER', targetId: c.id,
       cost: await this.gen.costOf('CHARACTER_CANDIDATES', count), count,
-      work: { prompt, inputImageKeys: refs.map((r) => r.storageKey), count, characterId: c.id },
-      fingerprint: [count, b.extraPrompt ?? ''],
+      work: { prompt, inputImageKeys: refs.map((r) => r.storageKey), count, characterId: c.id, seed: b.seed ?? newSeed(), negativePrompt: b.negativePrompt || undefined },
+      fingerprint: [count, b.extraPrompt ?? '', b.seed ?? null, b.negativePrompt ?? ''],
     });
   }
 

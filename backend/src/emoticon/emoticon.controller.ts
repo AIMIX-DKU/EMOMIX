@@ -7,7 +7,7 @@ import { StorageService } from '../common/storage.service.js';
 import { parse, pageOf, pageResult, z } from '../common/validate.js';
 import { isPublishedSet } from '../character/character.controller.js';
 import { sniffImage } from '../upload/image.js';
-import { GenerationService } from '../generation/generation.service.js';
+import { GenerationService, newSeed, seedFields } from '../generation/generation.service.js';
 import { PrismaService } from '../prisma.service.js';
 
 type EmoticonFull = Emoticon & { current: EmoticonVersion | null };
@@ -122,6 +122,7 @@ export class EmoticonController {
         emotions: z.array(z.object({ key: z.string().trim().min(1).max(30), customPrompt: z.string().max(300).optional() })).min(1).max(16),
         templateProductId: z.string().optional(),
         variables: z.record(z.string(), z.unknown()).optional(),
+        ...seedFields,
       }),
       body,
     );
@@ -148,8 +149,8 @@ export class EmoticonController {
     return this.gen.create({
       userId: me.id, idempotencyKey: key, type: 'EMOTION_SET', targetType: 'SET', targetId: set.id,
       cost: await this.gen.costOf('EMOTION_SET', items.length), count: items.length,
-      work: { prompt: base, inputImageKeys: [ch.baseImageKey], items, count: items.length, setId: set.id, characterId: ch.id },
-      fingerprint: [b.emotions, b.templateProductId ?? '', b.variables ?? {}],
+      work: { prompt: base, inputImageKeys: [ch.baseImageKey], items, count: items.length, setId: set.id, characterId: ch.id, seed: b.seed ?? newSeed(), negativePrompt: b.negativePrompt || undefined },
+      fingerprint: [b.emotions, b.templateProductId ?? '', b.variables ?? {}, b.seed ?? null, b.negativePrompt ?? ''],
       prepare: async (tx) => {
         await tx.emoticon.createMany({ data: items.map((i) => ({ id: i.emoticonId, setId: set.id, label: i.label, status: 'GENERATING' as const })) });
       },
@@ -191,13 +192,13 @@ export class EmoticonController {
   async regenerate(@CurrentUser() me: Me, @Param('id') id: string, @Headers('idempotency-key') key: string | undefined, @Body() body: unknown) {
     const e = await this.ownEmoticon(me, id);
     if (!e.current) throw new ApiError('VALIDATION_ERROR', '아직 생성이 끝나지 않은 이모티콘입니다.');
-    const b = parse(z.object({ prompt: z.string().max(300).optional() }), body);
+    const b = parse(z.object({ prompt: z.string().max(300).optional(), ...seedFields }), body);
     const w = await this.singleWork(me, e, [e.label, b.prompt].filter(Boolean).join('. '));
     return this.gen.create({
       userId: me.id, idempotencyKey: key, type: 'EMOTION_REGENERATE', targetType: 'EMOTICON', targetId: e.id,
       cost: await this.gen.costOf('EMOTION_REGENERATE', 1), count: 1,
-      work: { prompt: w.base, inputImageKeys: [w.ch?.baseImageKey, e.current.imageKey].filter(Boolean) as string[], items: w.items, count: 1 },
-      fingerprint: [b.prompt ?? ''],
+      work: { prompt: w.base, inputImageKeys: [w.ch?.baseImageKey, e.current.imageKey].filter(Boolean) as string[], items: w.items, count: 1, seed: b.seed ?? newSeed(), negativePrompt: b.negativePrompt || undefined },
+      fingerprint: [b.prompt ?? '', b.seed ?? null, b.negativePrompt ?? ''],
     });
   }
 
@@ -205,7 +206,7 @@ export class EmoticonController {
   async inpaint(@CurrentUser() me: Me, @Param('id') id: string, @Headers('idempotency-key') key: string | undefined, @Body() body: unknown) {
     const e = await this.ownEmoticon(me, id);
     if (!e.current) throw new ApiError('VALIDATION_ERROR', '아직 생성이 끝나지 않은 이모티콘입니다.');
-    const b = parse(z.object({ maskUploadId: z.string(), prompt: z.string().trim().min(1).max(300) }), body);
+    const b = parse(z.object({ maskUploadId: z.string(), prompt: z.string().trim().min(1).max(300), ...seedFields }), body);
     const mask = await this.prisma.upload.findUnique({ where: { id: b.maskUploadId } });
     if (!mask || mask.ownerId !== me.id || mask.purpose !== 'MASK' || mask.status !== 'CONFIRMED') {
       throw new ApiError('VALIDATION_ERROR', '사용할 수 없는 마스크 이미지입니다.');
@@ -217,8 +218,8 @@ export class EmoticonController {
     return this.gen.create({
       userId: me.id, idempotencyKey: key, type: 'INPAINT', targetType: 'EMOTICON', targetId: e.id,
       cost: await this.gen.costOf('INPAINT', 1), count: 1,
-      work: { prompt: `${w.base}. ${b.prompt}`, inputImageKeys: [e.current.imageKey], maskKey: mask.storageKey, originalKey: e.current.imageKey, items: w.items, count: 1 },
-      fingerprint: [b.maskUploadId, b.prompt],
+      work: { prompt: `${w.base}. ${b.prompt}`, inputImageKeys: [e.current.imageKey], maskKey: mask.storageKey, originalKey: e.current.imageKey, items: w.items, count: 1, seed: b.seed ?? newSeed(), negativePrompt: b.negativePrompt || undefined },
+      fingerprint: [b.maskUploadId, b.prompt, b.seed ?? null, b.negativePrompt ?? ''],
     });
   }
 
