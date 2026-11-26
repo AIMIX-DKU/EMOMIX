@@ -1,10 +1,12 @@
 import { api, uploadImage } from './api.js';
 import { label } from './labels.js';
+import { createInpaint } from './inpaint.js';
 import {
   h,
   id,
   picture,
   heading,
+  pageHead,
   panel,
   field,
   empty,
@@ -13,6 +15,7 @@ import {
 } from './service-ui.js';
 
 export function createWorkshop(ui) {
+  const inpaint = createInpaint(ui);
   const choices = [
     ['ORIGINAL', '원본'],
     ['TRANSPARENT_PNG', '투명 PNG'],
@@ -31,89 +34,107 @@ export function createWorkshop(ui) {
           ' / 보유 ' +
           estimate.creditBalance,
       );
-    ui.confirm(
-      '생성 비용 확인',
-      count + '장 · ' + estimate.creditCost + ' 크레딧을 사용합니다.',
-      work,
-    );
+    // 확인창 없이 바로 생성한다. 크레딧이 모자라면 위에서 오류로 알려 준다.
+    await work();
   }
-  async function library(params) {
-    const tab = params.tab || 'sets';
-    const menu =
-      '<div class="row space">' +
-      ui.link('이모티콘 세트', 'library', { tab: 'sets' }) +
-      ui.link('캐릭터', 'library', { tab: 'characters' }) +
-      ui.link('북마크', 'library', { tab: 'bookmarks' }) +
-      ui.link('구매한 작품', 'library', { tab: 'purchases' }) +
-      '</div>';
-    const routes = {
-      sets: '/sets',
-      characters: '/characters',
-      bookmarks: '/users/me/bookmarks',
-      purchases: '/users/me/purchases',
-    };
-    const list = await ui.paginate(
-      routes[tab],
-      (items) =>
-        '<div class="grid">' +
-        items
-          .map((raw) => {
-            const item = raw.product || raw,
-              target =
-                tab === 'sets'
-                  ? 'set'
-                  : tab === 'characters'
-                    ? 'character'
-                    : tab === 'bookmarks'
-                      ? 'post'
-                      : 'product';
-            return ui.tile(
-              target,
-              { id: raw.productId || item.id },
-              {
-                art: picture(
-                  item.coverUrl ||
-                    item.baseImageUrl ||
-                    item.thumbnailUrl ||
-                    item.thumbnailUrls?.[0],
-                  item.title || item.name,
-                ),
-                title: item.title || item.name,
-                meta: h(label(item.status) || ''),
-              },
-            );
-          })
-          .join('') +
-        '</div>',
-      { ...params, route: 'library' },
+  const LIBRARY = {
+    sets: { path: '/sets', title: '이모티콘 세트' },
+    characters: { path: '/characters', title: '캐릭터' },
+    bookmarks: { path: '/users/me/bookmarks', title: '북마크' },
+    purchases: { path: '/users/me/purchases', title: '구매한 작품' },
+  };
+  const libraryTile = (raw, tab) => {
+    const item = raw.product || raw,
+      target =
+        tab === 'sets'
+          ? 'set'
+          : tab === 'characters'
+            ? 'character'
+            : tab === 'bookmarks'
+              ? 'post'
+              : 'product';
+    return ui.tile(
+      target,
+      { id: raw.productId || item.id },
       {
-        empty:
-          '<div class="empty"><p>' +
-          h(
-            {
-              sets: '아직 만든 이모티콘 세트가 없어요.',
-              characters: '아직 만든 캐릭터가 없어요.',
-              bookmarks: '북마크한 작품이 없어요.',
-              purchases: '구매한 작품이 없어요.',
-            }[tab] || '아직 내역이 없어요.',
-          ) +
-          '</p>' +
-          (tab === 'characters'
-            ? ui.link('첫 캐릭터 만들기', 'studio')
-            : tab === 'sets'
-              ? ui.link('새 세트 만들기', 'set-new')
-              : ui.link(tab === 'bookmarks' ? '커뮤니티 둘러보기' : '마켓 둘러보기', tab === 'bookmarks' ? 'community' : 'market')) +
-          '</div>',
+        art: picture(
+          item.coverUrl ||
+            item.baseImageUrl ||
+            item.thumbnailUrl ||
+            item.thumbnailUrls?.[0],
+          item.title || item.name,
+        ),
+        title: item.title || item.name,
+        meta: h(label(item.status) || ''),
       },
     );
+  };
+  const libraryEmpty = (tab) =>
+    '<div class="empty"><p>' +
+    h(
+      {
+        sets: '아직 만든 이모티콘 세트가 없어요.',
+        characters: '아직 만든 캐릭터가 없어요.',
+        bookmarks: '북마크한 작품이 없어요.',
+        purchases: '구매한 작품이 없어요.',
+      }[tab] || '아직 내역이 없어요.',
+    ) +
+    '</p>' +
+    (tab === 'characters'
+      ? ui.link('첫 캐릭터 만들기', 'studio')
+      : tab === 'sets'
+        ? ui.link('새 세트 만들기', 'set-new')
+        : tab === 'bookmarks'
+          ? ui.link('커뮤니티 둘러보기', 'community')
+          : ui.link('마켓 둘러보기', 'market')) +
+    '</div>';
+
+  // 보관함: 탭 없이 네 종류를 한 화면에 보여 준다. 더 있으면 "전체 보기"로 한 종류만 펼친다.
+  async function library(params) {
+    const actions =
+      ui.link('새 캐릭터 만들기', 'studio') + ui.link('새 세트 만들기', 'set-new');
+    if (params.tab && LIBRARY[params.tab]) {
+      const tab = params.tab;
+      return (
+        pageHead(LIBRARY[tab].title, '', ui.link('← 보관함 전체', 'library') + actions) +
+        (await ui.paginate(
+          LIBRARY[tab].path,
+          (items) =>
+            '<div class="grid">' + items.map((raw) => libraryTile(raw, tab)).join('') + '</div>',
+          { ...params, route: 'library' },
+          { empty: libraryEmpty(tab) },
+        ))
+      );
+    }
+    const tabs = Object.keys(LIBRARY);
+    const results = await Promise.all(
+      tabs.map((tab) =>
+        api(LIBRARY[tab].path + '?page=0&size=8').catch(() => ({ items: [], totalElements: 0 })),
+      ),
+    );
     return (
-      heading('내 보관함') +
-      menu +
-      '<div class="row space">' +
-      ui.link('새 캐릭터 만들기', 'studio') +
-      ui.link('새 세트 만들기', 'set-new') +
-      '</div>' +
-      list
+      pageHead('내 보관함', '내가 만든 것과 저장한 작품을 한곳에서 확인하세요.', actions) +
+      tabs
+        .map((tab, index) => {
+          const data = results[index],
+            total = data.totalElements ?? data.items.length;
+          return (
+            '<section class="lib-section"><div class="row between"><h2>' +
+            h(LIBRARY[tab].title) +
+            ' <span class="muted">' +
+            h(total) +
+            '</span></h2>' +
+            (total > data.items.length
+              ? ui.link('전체 보기', 'library', { tab })
+              : '') +
+            '</div>' +
+            (data.items.length
+              ? '<div class="grid">' + data.items.map((raw) => libraryTile(raw, tab)).join('') + '</div>'
+              : libraryEmpty(tab)) +
+            '</section>'
+          );
+        })
+        .join('')
     );
   }
   async function character(params) {
@@ -273,22 +294,31 @@ export function createWorkshop(ui) {
                 ui.go('job', { id: job.jobId });
               });
             },
-            '생성 비용 확인',
+            '선택한 표정 생성',
           ),
       ) +
-      '<div class="grid top">' +
+      (s.emoticons.some((e) => e.status === 'GENERATING')
+        ? '<p class="muted" data-watch-set="' + h(s.id) + '" role="status">생성 중인 이모티콘이 있어요. 완성되는 대로 나타나요.</p>'
+        : '') +
+      (s.emoticons.length
+        ? '<p class="muted top">이모티콘을 누르면 브러시로 부분 수정할 수 있어요.</p>'
+        : '') +
+      '<div class="grid">' +
       s.emoticons
-        .map(
-          (e) =>
-            '<article class="tile"><div class="art">' +
-            picture(e.imageUrl, e.label) +
-            '</div><h3>' +
-            h(e.label) +
-            '</h3><p class="muted">' +
-            h(label(e.status)) +
-            '</p>' +
-            ui.link('편집·버전·다운로드', 'editor', { id: e.id }) +
-            '</article>',
+        .map((e) =>
+          e.status === 'READY'
+            ? '<div class="tile-wrap">' +
+              ui.tileDo(() => inpaint.open(e), {
+                art: picture(e.thumbnailUrl || e.imageUrl, e.label),
+                title: e.label,
+              }) +
+              ui.link('상세·버전·다운로드', 'editor', { id: e.id }) +
+              '</div>'
+            : '<div class="tile-wrap"><div class="tile tile-pending"><span class="art"><span class="thumb-skeleton"></span></span><strong class="tile-title">' +
+              h(e.label) +
+              '</strong><span class="muted">' +
+              h(label(e.status)) +
+              '</span></div></div>',
         )
         .join('') +
       '</div>'
@@ -366,67 +396,10 @@ export function createWorkshop(ui) {
               maxlength: 300,
             }),
             regenerate,
-            '재생성 비용 확인',
+            '다시 만들기',
           ) +
-          '<h2>부분 수정</h2><p class="muted">수정할 부분을 칠해 주세요. 흰 영역이 수정 대상입니다.</p><div class="inpaint-area" data-original="' +
-          h(e.imageUrl || '') +
-          '">' +
-          picture(e.imageUrl, e.label) +
-          '<canvas aria-label="수정할 영역을 드래그해 선택"></canvas></div>' +
-          '<div class="row">' +
-          ui.action('마스크 지우기', () => {
-            const canvas = document.querySelector('.inpaint-area canvas');
-            canvas
-              .getContext('2d')
-              .clearRect(0, 0, canvas.width, canvas.height);
-            canvas.dataset.painted = '';
-            const revision = document.querySelector('[name=maskRevision]');
-            revision.value = String(Number(revision.value) + 1);
-          }) +
-          '</div>' +
-          ui.form(
-            '<input type="hidden" name="maskRevision" value="0">' +
-              field('prompt', '부분 수정 요청', 'textarea', '', {
-                maxlength: 300,
-              }),
-            async (data, form) => {
-              const c = document.querySelector('.inpaint-area canvas');
-              if (c.dataset.ready !== 'true' || !c.dataset.painted)
-                throw Error('이미지를 불러온 뒤 수정 영역을 칠해 주세요.');
-              const mask = document.createElement('canvas');
-              mask.width = c.width;
-              mask.height = c.height;
-              const ctx = mask.getContext('2d');
-              ctx.fillStyle = '#000';
-              ctx.fillRect(0, 0, mask.width, mask.height);
-              ctx.drawImage(c, 0, 0);
-              const blob = await new Promise((resolve) =>
-                mask.toBlob(resolve, 'image/png'),
-              );
-              if (!blob) throw Error('마스크 생성에 실패했습니다.');
-              const key = ui.key(form);
-              await cost('INPAINT', 1, async () => {
-                if (form.dataset.maskKey !== key) {
-                  const upload = await uploadImage(
-                    new File([blob], 'mask.png', { type: 'image/png' }),
-                    'MASK',
-                  );
-                  form.dataset.maskUploadId = upload.uploadId;
-                  form.dataset.maskKey = key;
-                }
-                const job = await api('/emoticons/' + id(e.id) + '/inpaints', {
-                  method: 'POST',
-                  idempotencyKey: key,
-                  body: {
-                    maskUploadId: form.dataset.maskUploadId,
-                    prompt: data.prompt,
-                  },
-                });
-                ui.go('job', { id: job.jobId });
-              });
-            },
-            '부분 수정 비용 확인',
-          ) +
+          '<h2>부분 수정</h2><p class="muted">바꾸고 싶은 부분만 브러시로 칠하면 그 부분만 다시 그려요.</p>' +
+          ui.action('브러시로 부분 수정', () => inpaint.open(e), true) +
           '<h2>버전 기록</h2>' +
           versions.items
             .map(
@@ -463,59 +436,35 @@ export function createWorkshop(ui) {
   function mount() {
     const watch = document.querySelector('[data-watch-job]');
     if (watch)
-      ui.schedule(() => ui.go('job', { id: watch.dataset.watchJob }), 3000);
-    const area = document.querySelector('.inpaint-area');
-    if (!area) return;
-    const canvas = area.querySelector('canvas'),
-      img = area.querySelector('img');
-    if (!img) return;
-    const ready = () => {
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      canvas.dataset.ready = 'true';
-    };
-    if (img.complete && img.naturalWidth) ready();
-    else img.addEventListener('load', ready, { once: true });
-    let drawing = false;
-    const paint = (event) => {
-      if (!drawing || canvas.dataset.ready !== 'true') return;
-      const r = canvas.getBoundingClientRect(),
-        ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(
-        ((event.clientX - r.left) * canvas.width) / r.width,
-        ((event.clientY - r.top) * canvas.height) / r.height,
-        Math.max(8, canvas.width * 0.035),
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-      canvas.dataset.painted = 'true';
-      const revision = document.querySelector('[name=maskRevision]');
-      revision.value = String(Number(revision.value) + 1);
-    };
-    canvas.addEventListener('pointerdown', (e) => {
-      drawing = true;
-      canvas.setPointerCapture(e.pointerId);
-      paint(e);
-    });
-    canvas.addEventListener('pointermove', paint);
-    canvas.addEventListener('pointerup', () => {
-      drawing = false;
-    });
-    canvas.addEventListener('pointercancel', () => {
-      drawing = false;
-    });
+      ui.schedule(() => ui.go('job', { id: watch.dataset.watchJob }), 2000);
+    const watchSet = document.querySelector('[data-watch-set]');
+    if (watchSet)
+      ui.schedule(() => ui.go('set', { id: watchSet.dataset.watchSet }), 2500);
   }
   async function job(params) {
     const j = await api('/generations/' + id(params.id));
     const active = ['QUEUED', 'RUNNING'].includes(j.status);
     const delayed =
       j.status === 'QUEUED' && Date.now() - Date.parse(j.createdAt) >= 60000;
+    // 이모티콘 결과는 눌러서 바로 브러시 수정, 그 밖에는 이미지만 보여 준다
+    const editable = ['EMOTION_SET', 'EMOTION_REGENERATE', 'INPAINT'].includes(j.type);
     const result =
-      j.result?.images?.map((i) => picture(i.imageUrl, '생성 결과')).join('') ||
-      '';
+      j.result?.images
+        ?.map((i, index) => {
+          const art = picture(i.thumbnailUrl || i.imageUrl, '생성 결과 ' + (index + 1));
+          return editable
+            ? ui.tileDo(
+                () =>
+                  inpaint.open({
+                    id: j.type === 'EMOTION_SET' ? i.id : j.targetId,
+                    label: '생성 결과 ' + (index + 1),
+                    imageUrl: i.imageUrl,
+                  }),
+                { art, title: '결과 ' + (index + 1), meta: '눌러서 부분 수정' },
+              )
+            : art;
+        })
+        .join('') || '';
     return (
       heading('생성 작업') +
       panel(
@@ -523,7 +472,9 @@ export function createWorkshop(ui) {
           h(label(j.status)) +
           ' · ' +
           h(j.progress || 0) +
-          '%</p><p>대기 순번 ' +
+          '%' +
+          (j.result?.images?.length ? ' · ' + h(j.result.images.length) + '장 완료' : '') +
+          '</p><p>대기 순번 ' +
           h(j.queuePosition) +
           ' · 비용 ' +
           h(j.creditCost) +

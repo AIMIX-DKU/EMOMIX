@@ -33,12 +33,12 @@ const input = (label, name, type = 'text', value = '') =>
   '" required></label>';
 const image = (url, alt) =>
   url
-    ? '<img class="live-image" src="' +
+    ? '<img class="live-image is-loading" loading="lazy" decoding="async" src="' +
       escape(url) +
       '" alt="' +
       escape(alt) +
       '">'
-    : '<p class="muted">이미지 준비 중</p>';
+    : '<div class="img-empty"><span aria-hidden="true">🖼</span><small>아직 이미지가 없어요</small></div>';
 
 export function createLiveApp({ root, navigate, notify }) {
   let page = '',
@@ -60,6 +60,11 @@ export function createLiveApp({ root, navigate, notify }) {
     request = null,
     timer;
   const main = root.querySelector('main');
+  // 후보 장수(1~3), 장수별 크레딧, 보유 크레딧, 이번 요청 장수
+  let count = 1,
+    estimates = {},
+    balance = null,
+    jobCount = 1;
   const panel = (title, content) =>
     '<div class="space"><h1>' +
     title +
@@ -140,6 +145,30 @@ export function createLiveApp({ root, navigate, notify }) {
     );
   }
 
+  // 아직 도착하지 않은 후보 자리 수
+  const pendingSlots = () =>
+    job && ['QUEUED', 'RUNNING'].includes(job.status)
+      ? Math.max(jobCount - candidates.length, 0)
+      : 0;
+  async function refreshEstimates() {
+    try {
+      const list = await Promise.all(
+        [1, 2, 3].map((n) =>
+          api('/generations/estimates', {
+            method: 'POST',
+            body: { type: 'CHARACTER_CANDIDATES', count: n },
+          }),
+        ),
+      );
+      list.forEach((item, index) => {
+        estimates[index + 1] = item.creditCost;
+      });
+      balance = list[0].creditBalance;
+    } catch {
+      // 로그인 전이거나 일시 오류면 비용 표시만 비워 둔다
+    }
+  }
+
   function studioView() {
     const options = styles
       .map(
@@ -154,20 +183,46 @@ export function createLiveApp({ root, navigate, notify }) {
       )
       .join('');
     return (
-      '<div class="hero"><h1>나만의 이모티콘</h1><p class="lead">머릿속 캐릭터에, 나다운 표정을.</p></div>' +
+      '<div class="hero"><h1>나만의 이모티콘</h1><p class="lead">머릿속 캐릭터에, 나다운 표정을.</p>' +
+      (balance !== null
+        ? '<p class="hero-credit">보유 크레딧 <b>' + escape(balance) + '</b></p>'
+        : '') +
+      '</div>' +
       '<div class="columns"><form class="panel tinted stack" data-live-form="generate"><label>어떤 캐릭터를 만들까요?<textarea name="description" rows="3" maxlength="500" required placeholder="예시) 우주복을 입은 말랑한 물방울 캐릭터">' +
       escape(description) +
       '</textarea></label>' +
       '<label>그림체<select name="style" required>' +
       options +
       '</select></label><label class="upload">참고 이미지 추가<input name="reference" type="file" accept="image/png,image/jpeg,image/webp"></label>' +
-      '<p class="muted">후보 3장 · 생성 전 서버에서 비용을 확인해요.</p><button class="primary" type="submit" ' +
+      '<fieldset class="count-pick"><legend>후보 장수</legend><div class="tabs" role="group">' +
+      [1, 2, 3]
+        .map(
+          (n) =>
+            '<button type="button" data-live="count-' +
+            n +
+            '" aria-pressed="' +
+            (count === n) +
+            '">' +
+            n +
+            '장</button>',
+        )
+        .join('') +
+      '</div><span class="muted count-cost">' +
+      (estimates[count] !== undefined
+        ? count + '장 · ' + escape(estimates[count]) + ' 크레딧'
+        : '비용을 계산하는 중이에요') +
+      '</span></fieldset>' +
+      '<button class="primary" type="submit" ' +
       (busy || !styles.length ? 'disabled' : '') +
-      '>후보 생성 비용 확인</button></form>' +
+      '>후보 ' +
+      count +
+      '장 만들기' +
+      (estimates[count] !== undefined ? ' · ' + escape(estimates[count]) + ' 크레딧' : '') +
+      '</button></form>' +
       '<section class="panel stack"><h2>캐릭터 미리보기</h2><p class="live-job" role="status">' +
       escape(jobMessage) +
       '</p>' +
-      (candidates.length
+      (candidates.length || pendingSlots()
         ? '<div class="thumbs">' +
           candidates
             .map(
@@ -177,15 +232,22 @@ export function createLiveApp({ root, navigate, notify }) {
                 '" aria-pressed="' +
                 (chosen === index) +
                 '">' +
-                image(item.imageUrl, '캐릭터 후보 ' + (index + 1)) +
+                image(item.thumbnailUrl || item.imageUrl, '캐릭터 후보 ' + (index + 1)) +
                 '</button>',
             )
             .join('') +
-          '</div><div class="row">' +
-          button('이 캐릭터 확정', 'confirm', true) +
-          button('PNG 다운로드', 'download') +
-          button('건너뛰기', 'skip') +
-          '</div>'
+          Array.from(
+            { length: pendingSlots() },
+            () => '<div class="thumb-skeleton" aria-hidden="true"></div>',
+          ).join('') +
+          '</div>' +
+          (candidates.length
+            ? '<div class="row">' +
+              button('이 캐릭터 확정', 'confirm', true) +
+              button('PNG 다운로드', 'download') +
+              button('건너뛰기', 'skip') +
+              '</div>'
+            : '')
         : '<div class="empty">설명을 입력하고 후보를 만들어 보세요.</div>') +
       (job && ['QUEUED', 'RUNNING'].includes(job.status)
         ? '<div class="row">' +
@@ -278,11 +340,10 @@ export function createLiveApp({ root, navigate, notify }) {
       targetTab = tab;
     try {
       if (target === 'studio') {
-        if (!styles.length) {
-          styles = (await api('/style-presets')).items;
-          if (token !== revision) return;
-          main.innerHTML = studioView();
-        }
+        if (!styles.length) styles = (await api('/style-presets')).items;
+        await refreshEstimates();
+        if (token !== revision) return;
+        main.innerHTML = studioView();
         return;
       }
       if (target === 'auth') {
@@ -417,10 +478,27 @@ export function createLiveApp({ root, navigate, notify }) {
         job.status === 'QUEUED'
           ? '대기 중 · 순번 ' + job.queuePosition
           : job.status === 'RUNNING'
-            ? '생성 중 · ' + job.progress + '%'
+            ? '생성 중 · ' +
+              (job.result?.images?.length ?? 0) +
+              '/' +
+              jobCount +
+              '장 완료'
             : job.status === 'SUCCEEDED'
               ? '생성이 완료됐어요.'
               : '작업 종료 · ' + (job.errorCode || label(job.status));
+      if (
+        job.type === 'CHARACTER_CANDIDATES' &&
+        job.status !== 'SUCCEEDED' &&
+        job.result?.images?.length
+      ) {
+        // 끝나기 전에도 완성된 후보부터 보여 준다
+        candidates = job.result.images.map((i) => ({
+          imageId: i.id,
+          imageUrl: i.imageUrl,
+          thumbnailUrl: i.thumbnailUrl,
+        }));
+        if (chosen >= candidates.length) chosen = 0;
+      }
       if (job.status === 'SUCCEEDED' && job.type === 'CHARACTER_CANDIDATES') {
         const id = job.targetId || character?.id;
         character = await api('/characters/' + encodeURIComponent(id));
@@ -431,7 +509,8 @@ export function createLiveApp({ root, navigate, notify }) {
       }
       repaintJob();
       if (['QUEUED', 'RUNNING'].includes(job.status))
-        timer = setTimeout(checkJob, 3000);
+        timer = setTimeout(checkJob, 2000);
+      else refreshEstimates().then(repaintJob);
     } catch (error) {
       jobMessage =
         error.message + ' 생성 내역에서 작업을 다시 확인할 수 있어요.';
@@ -450,7 +529,7 @@ export function createLiveApp({ root, navigate, notify }) {
           '/candidates',
         {
           method: 'POST',
-          body: { count: 3 },
+          body: { count: jobCount },
           idempotencyKey: request.key,
         },
       );
@@ -535,7 +614,7 @@ export function createLiveApp({ root, navigate, notify }) {
       if (!description) throw new Error('캐릭터 설명을 입력해 주세요.');
       const estimate = await api('/generations/estimates', {
         method: 'POST',
-        body: { type: 'CHARACTER_CANDIDATES', count: 3 },
+        body: { type: 'CHARACTER_CANDIDATES', count },
       });
       if (!estimate.sufficient)
         throw new Error(
@@ -545,17 +624,7 @@ export function createLiveApp({ root, navigate, notify }) {
             estimate.creditBalance +
             ' 크레딧',
         );
-      // Ask before reserving credits, after the server has calculated the current price.
-      if (
-        !window.confirm(
-          '후보 3장 생성에 ' +
-            estimate.creditCost +
-            ' 크레딧이 필요해요. 보유 ' +
-            estimate.creditBalance +
-            ' 크레딧에서 사용해 생성할까요?',
-        )
-      )
-        return;
+      jobCount = count;
       const reference = data.get('reference'),
         referenceUploadIds = [];
       if (reference?.size)
@@ -626,6 +695,11 @@ export function createLiveApp({ root, navigate, notify }) {
       text.className = 'terms';
       text.textContent = data.content || data.body || data.title;
       main.querySelector('.live-terms').append(text);
+      return;
+    }
+    if (name.startsWith('count-')) {
+      count = Number(name.slice(6));
+      repaintJob();
       return;
     }
     if (name.startsWith('choose-')) {
@@ -725,7 +799,7 @@ export function createLiveApp({ root, navigate, notify }) {
       try {
         await action(target.dataset.live);
       } catch (error) {
-        notify(error.message);
+        notify(error.message, 'error');
       } finally {
         target.disabled = false;
       }
@@ -748,7 +822,7 @@ export function createLiveApp({ root, navigate, notify }) {
       try {
         await handleForm(form);
       } catch (error) {
-        notify(error.message);
+        notify(error.message, 'error');
       } finally {
         delete form.dataset.busy;
         if (submit) submit.disabled = false;
@@ -759,7 +833,7 @@ export function createLiveApp({ root, navigate, notify }) {
   initializeCsrf()
     .then(session)
     .catch((error) => {
-      if (error.status !== 401) notify(error.message);
+      if (error.status !== 401) notify(error.message, 'error');
       user = null;
       wallet = null;
       updateHeader();
